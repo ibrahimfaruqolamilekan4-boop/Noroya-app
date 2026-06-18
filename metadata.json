@@ -1,0 +1,14 @@
+{
+  "name": "Nooraya",
+  "description": "An immersive Islamic storytelling encyclopedia with 'Chronicles of the Righteous', interactive spiritual modules, and a serene luxury black Sanctuary Quran player with ambient nature backdrops.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "Video Streaming",
+    "Real-time Chat",
+    "Payment Integration",
+    "Authentication"
+  ]
+}

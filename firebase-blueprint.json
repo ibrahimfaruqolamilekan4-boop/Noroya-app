@@ -1,0 +1,335 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile information for regular users, scholars (clerics), and guardians (admins)",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "displayName": { "type": "string" },
+        "email": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "role": { "type": "string", "enum": ["user", "cleric", "scholar", "admin"] },
+        "verified": { "type": "boolean" },
+        "isRevert": { "type": "boolean" },
+        "bio": { "type": "string" },
+        "specialty": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "displayName", "role"]
+    },
+    "DreamEntry": {
+      "title": "Dream Entry",
+      "description": "Encrypted logs of dreams shared with AI",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "description": { "type": "string" },
+        "interpretation": { "type": "string" },
+        "mood": { "type": "string" },
+        "isSecret": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "description", "createdAt"]
+    },
+    "SavedResource": {
+      "title": "Saved Resource",
+      "description": "Content bookmarked by the user (videos, ayahs, stories)",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "contentType": { "type": "string", "enum": ["video", "ayah", "story", "miracle"] },
+        "contentId": { "type": "string" },
+        "metadata": { "type": "object" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "contentType", "contentId", "createdAt"]
+    },
+    "LearningProgress": {
+      "title": "Learning Progress",
+      "description": "Tracks completed modules and user levels",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "completedModules": { "type": "array", "items": { "type": "string" } },
+        "currentLevel": { "type": "number" },
+        "points": { "type": "number" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "completedModules", "currentLevel", "updatedAt"]
+    },
+    "NoorChat": {
+      "title": "Noor Chat",
+      "description": "Private logs of conversations with the Noor AI Counselor",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "messages": { 
+          "type": "array", 
+          "items": {
+            "type": "object",
+            "properties": {
+              "role": { "type": "string", "enum": ["user", "model"] },
+              "text": { "type": "string" },
+              "timestamp": { "type": "string", "format": "date-time" }
+            }
+          }
+        },
+        "isSecret": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "messages", "updatedAt"]
+    },
+    "UserSettings": {
+      "title": "User Settings",
+      "description": "Private sensitive information like email and payment info",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "stripeId": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "Video": {
+      "title": "Video",
+      "description": "Short-form video content uploaded by clerics",
+      "type": "object",
+      "properties": {
+        "clericId": { "type": "string" },
+        "clericName": { "type": "string" },
+        "clericPhoto": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "videoUrl": { "type": "string" },
+        "thumbnailUrl": { "type": "string" },
+        "likes": { "type": "number" },
+        "views": { "type": "number" },
+        "shares": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["clericId", "videoUrl", "createdAt"]
+    },
+    "Question": {
+      "title": "Question",
+      "description": "A Q&A or counseling request from a user to a cleric",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "clericId": { "type": "string" },
+        "clericName": { "type": "string" },
+        "content": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "answered", "rejected"] },
+        "answer": { "type": "string" },
+        "answerType": { "type": "string", "enum": ["text", "audio", "video"] },
+        "isPaid": { "type": "boolean" },
+        "price": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "answeredAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "clericId", "content", "status", "createdAt"]
+    },
+    "Follow": {
+      "title": "Follow",
+      "description": "Relationship between a follower and a cleric",
+      "type": "object",
+      "properties": {
+        "followerId": { "type": "string" },
+        "clericId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["followerId", "clericId", "createdAt"]
+    },
+    "Like": {
+      "title": "Like",
+      "description": "Indicates a user likes a video",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "videoId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "videoId", "createdAt"]
+    },
+    "GratitudeEntry": {
+      "title": "Gratitude Entry",
+      "description": "A user's journal entry for countings blessings",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "text": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "text", "createdAt"]
+    },
+    "SadaqahRecord": {
+      "title": "Sadaqah Record",
+      "description": "A record of a good deed performed by a user",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "type": { "type": "string", "enum": ["prayer", "fasting", "charity", "smile", "dhikr"] },
+        "count": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "type", "count", "createdAt"]
+    },
+    "VideoFeedback": {
+      "title": "Video Feedback",
+      "description": "User feedback or report on video content",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "videoId": { "type": "string" },
+        "feedback": { "type": "string" },
+        "type": { "type": "string", "enum": ["positive", "constructive", "report"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "videoId", "feedback", "type", "createdAt"]
+    },
+    "ScholarVideo": {
+      "title": "Scholar Video",
+      "description": "Video lessons and reminders uploaded by scholars",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "scholar_id": { "type": "string" },
+        "scholar_name": { "type": "string" },
+        "scholar_photo": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "video_url": { "type": "string" },
+        "thumbnail_url": { "type": "string" },
+        "category": { "type": "string", "enum": ["Daily Tafseer", "Prophetic Character", "Advice"] },
+        "created_at": { "type": "string", "format": "date-time" },
+        "is_published": { "type": "boolean" }
+      },
+      "required": ["scholar_id", "title", "video_url", "created_at"]
+    },
+    "CommunityStat": {
+      "title": "Community Stat",
+      "description": "Aggregated stats for the entire community",
+      "type": "object",
+      "properties": {
+        "totalPrayers": { "type": "number" },
+        "totalFasting": { "type": "number" },
+        "totalCharity": { "type": "number" },
+        "totalSmiles": { "type": "number" },
+        "totalDhikr": { "type": "number" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "Article": {
+      "title": "Article",
+      "description": "Encyclopedia articles about Prophets and righteous figures",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "heroText": { "type": "string" },
+        "prophet": { "type": "string" },
+        "theme": { "type": "string" },
+        "readTime": { "type": "string" },
+        "summary": { "type": "string" },
+        "sections": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "title": { "type": "string" },
+              "subtitle": { "type": "string" },
+              "content": { "type": "string" }
+            }
+          }
+        },
+        "trial": { "type": "string" },
+        "characterTrait": { "type": "string" },
+        "modernLesson": { "type": "string" },
+        "ayahs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "arabic": { "type": "string" },
+              "translation": { "type": "string" },
+              "reference": { "type": "string" }
+            }
+          }
+        },
+        "color": { "type": "string" },
+        "type": { "type": "string", "enum": ["prophet", "companion", "righteous", "science"] },
+        "is_published": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "title", "prophet", "type", "sections"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Public User profiles"
+    },
+    "/users/{userId}/private/settings": {
+      "schema": "UserSettings",
+      "description": "Private user settings"
+    },
+    "/videos/{videoId}": {
+      "schema": "Video",
+      "description": "Shared videos"
+    },
+    "/questions/{questionId}": {
+      "schema": "Question",
+      "description": "Q&A interactions"
+    },
+    "/users/{userId}/follows/{clericId}": {
+      "schema": "Follow",
+      "description": "Clerics followed by a user"
+    },
+    "/videos/{videoId}/likes/{userId}": {
+      "schema": "Like",
+      "description": "Likes on a video"
+    },
+    "/gratitude/{entryId}": {
+      "schema": "GratitudeEntry",
+      "description": "User gratitude journal entries"
+    },
+    "/sadaqah/{recordId}": {
+      "schema": "SadaqahRecord",
+      "description": "Individual good deed logs"
+    },
+    "/community_stats/{statId}": {
+      "schema": "CommunityStat",
+      "description": "Global community statistics"
+    },
+    "/dreams/{dreamId}": {
+      "schema": "DreamEntry",
+      "description": "Private dream journal entries"
+    },
+    "/users/{userId}/saved/{resourceId}": {
+      "schema": "SavedResource",
+      "description": "User bookmarks"
+    },
+    "/users/{userId}/progress/stats": {
+      "schema": "LearningProgress",
+      "description": "User learning milestones"
+    },
+    "/noor_chats/{chatId}": {
+      "schema": "NoorChat",
+      "description": "Conversations with Noor AI"
+    },
+    "/scholar_videos/{videoId}": {
+      "schema": "ScholarVideo",
+      "description": "Scholar video lessons"
+    },
+    "/video_feedback/{feedbackId}": {
+      "schema": "VideoFeedback",
+      "description": "Feedback submitted for videos"
+    },
+    "/articles/{articleId}": {
+      "schema": "Article",
+      "description": "Knowledge repository articles"
+    }
+  }
+}

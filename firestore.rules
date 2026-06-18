@@ -1,0 +1,273 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        request.auth.token.email == "ibrahimfaruqolamilekan4@gmail.com"
+      );
+    }
+
+    function isCleric() {
+      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ["cleric", "scholar"];
+    }
+
+    function isScholar() {
+      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "scholar";
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // VALIDATION HELPERS
+    function isValidUser(data) {
+      return (data.displayName == null || (data.displayName is string && data.displayName.size() <= 100)) &&
+             (data.isRevert == null || data.isRevert is bool) &&
+             data.role in ["user", "cleric", "admin"];
+    }
+
+    function isValidDream(data) {
+      return data.userId is string && isValidId(data.userId) &&
+             data.description is string && data.description.size() <= 5000 &&
+             (data.interpretation == null || data.interpretation is string) &&
+             data.createdAt == request.time;
+    }
+
+    function isValidSavedResource(data) {
+      return data.userId is string && isValidId(data.userId) &&
+             data.contentType in ["video", "ayah", "story", "miracle"] &&
+             data.contentId is string && data.contentId.size() <= 200 &&
+             data.createdAt == request.time;
+    }
+
+    function isValidLearningProgress(data) {
+      return data.userId is string && isValidId(data.userId) &&
+             data.completedModules is list &&
+             data.currentLevel is number &&
+             data.updatedAt == request.time;
+    }
+
+    function isValidNoorChat(data) {
+      return data.userId is string && isValidId(data.userId) &&
+             data.messages is list &&
+             data.updatedAt == request.time;
+    }
+
+    function isValidVideoFeedback(data) {
+      return data.userId is string && isValidId(data.userId) &&
+             data.videoId is string && isValidId(data.videoId) &&
+             data.feedback is string && data.feedback.size() <= 2000 &&
+             data.type in ["positive", "constructive", "report"] &&
+             data.createdAt == request.time;
+    }
+
+    function isValidScholarVideo(data) {
+      return data.scholar_id is string && isValidId(data.scholar_id) &&
+             data.title is string && data.title.size() <= 300 &&
+             (data.description == null || (data.description is string && data.description.size() <= 2000)) &&
+             data.video_url is string && data.video_url.size() <= 2000 &&
+             (data.thumbnail_url == null || (data.thumbnail_url is string && data.thumbnail_url.size() <= 2000)) &&
+             data.category in ["Daily Tafseer", "Prophetic Character", "Advice"] &&
+             data.is_published is bool &&
+             data.created_at == request.time;
+    }
+
+    function isValidVideo(data, isUpdate) {
+      return data.clericId is string && isValidId(data.clericId) &&
+             data.clericName is string && data.clericName.size() <= 200 &&
+             (data.clericPhoto == null || data.clericPhoto is string) &&
+             data.videoUrl is string && data.videoUrl.size() <= 1000 &&
+             data.title is string && data.title.size() <= 200 &&
+             (data.description == null || data.description is string) &&
+             data.likes is number && data.comments is number && data.views is number && data.shares is number &&
+             data.isVerified is bool &&
+             (isUpdate ? true : data.createdAt == request.time);
+    }
+
+    function isValidQuestion(data) {
+      return data.userId is string && isValidId(data.userId) &&
+             data.clericId is string && isValidId(data.clericId) &&
+             data.content is string && data.content.size() <= 2000 &&
+             data.status in ["pending", "answered", "rejected"] &&
+             data.createdAt == request.time;
+    }
+
+    function isValidArticle(data) {
+      return data.id is string && isValidId(data.id) &&
+             data.title is string && data.title.size() <= 300 &&
+             data.prophet is string && data.prophet.size() <= 100 &&
+             data.type in ["prophet", "companion", "righteous", "science"] &&
+             data.sections is list &&
+             (data.is_published == null || data.is_published is bool);
+    }
+
+    // RULES
+    match /users/{userId} {
+      allow get: if isSignedIn();
+      allow list: if isSignedIn() && (resource.data.role == 'cleric' || isOwner(userId) || isAdmin());
+      allow create: if isOwner(userId) && isValidUser(incoming()) && 
+                       (incoming().role != 'admin' || isAdmin()) && 
+                       incoming().createdAt == request.time;
+      allow update: if isOwner(userId) && isValidUser(incoming()) && (
+        // Standard profile update
+        (incoming().role == existing().role && 
+         incoming().createdAt == existing().createdAt &&
+         incoming().updatedAt == request.time &&
+         incoming().diff(existing()).affectedKeys().hasAll(['updatedAt']) &&
+         incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'bio', 'photoURL', 'specialty', 'isRevert', 'updatedAt', 'lastLogin', 'lastActive', 'noorPoints', 'noorLevel', 'streakCount', 'lastRevertDayCompletedAt', 'completedDeeds'])) ||
+        // Role promotion to cleric
+        (existing().role == 'user' && incoming().role == 'cleric' && 
+         incoming().verified == true && // For demo purposes, we auto-verify
+         incoming().createdAt == existing().createdAt &&
+         incoming().updatedAt == request.time &&
+         incoming().diff(existing()).affectedKeys().hasOnly(['role', 'verified', 'updatedAt'])) ||
+        isAdmin()
+      );
+
+      match /private/settings {
+        allow read, write: if isOwner(userId) || isAdmin();
+      }
+
+      match /saved/{resourceId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      match /progress/stats {
+        allow read, write: if isOwner(userId);
+      }
+    }
+
+    match /dreams/{dreamId} {
+      // ABSOLUTE PRIVACY: Only the owner can read/write. No admin access.
+      allow get: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && isValidDream(incoming()) && incoming().userId == request.auth.uid;
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    match /noor_chats/{chatId} {
+      // ABSOLUTE PRIVACY: Only the owner can read/write. No admin access.
+      allow get: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && isValidNoorChat(incoming()) && incoming().userId == request.auth.uid;
+      allow update: if isSignedIn() && isValidNoorChat(incoming()) && 
+                    resource.data.userId == request.auth.uid && 
+                    incoming().userId == request.auth.uid;
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    match /video_feedback/{feedbackId} {
+      allow read: if isAdmin();
+      allow create: if isSignedIn() && isValidVideoFeedback(incoming()) && incoming().userId == request.auth.uid;
+      allow delete: if isAdmin();
+    }
+
+    match /scholar_videos/{videoId} {
+      allow get: if true;
+      allow list: if true;
+      allow create: if isScholar() && isValidScholarVideo(incoming()) && incoming().scholar_id == request.auth.uid;
+      allow update: if (isScholar() && existing().scholar_id == request.auth.uid && 
+                        isValidScholarVideo(incoming()) && 
+                        incoming().scholar_id == existing().scholar_id &&
+                        incoming().created_at == existing().created_at &&
+                        incoming().diff(existing()).affectedKeys().hasOnly(['title', 'description', 'video_url', 'thumbnail_url', 'category', 'is_published'])) ||
+                       isAdmin();
+      allow delete: if (isSignedIn() && existing().scholar_id == request.auth.uid) || isAdmin();
+    }
+
+    match /videos/{videoId} {
+      allow get: if true;
+      allow list: if true; 
+      allow create: if isSignedIn() && isValidVideo(incoming(), false) && incoming().clericId == request.auth.uid && 
+                     (incoming().isVerified == false || isCleric() || isAdmin());
+      allow update: if ((isSignedIn() && incoming().clericId == request.auth.uid && isValidVideo(incoming(), true) && 
+                        incoming().createdAt == existing().createdAt &&
+                        incoming().diff(existing()).affectedKeys().hasOnly(['title', 'description', 'thumbnailUrl', 'videoUrl', 'clericName', 'clericPhoto', 'isVerified'])) ||
+                       (isSignedIn() && incoming().diff(existing()).affectedKeys().hasOnly(['likes', 'comments', 'views', 'shares'])) || // Meta updates
+                       isAdmin());
+      allow delete: if (isSignedIn() && existing().clericId == request.auth.uid) || isAdmin();
+      
+      match /likes/{userId} {
+        allow read: if true;
+        allow create: if isOwner(userId) && isValidId(videoId);
+        allow delete: if isOwner(userId);
+      }
+    }
+
+    match /questions/{questionId} {
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || resource.data.clericId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && isValidQuestion(incoming()) && incoming().userId == request.auth.uid &&
+                       exists(/databases/$(database)/documents/users/$(incoming().clericId));
+      allow update: if isSignedIn() && (
+        // User cancelling
+        (existing().userId == request.auth.uid && incoming().status == 'rejected' && incoming().diff(existing()).affectedKeys().hasOnly(['status'])) ||
+        // Cleric answering
+        (existing().clericId == request.auth.uid && isValidQuestion(incoming()) && 
+         incoming().diff(existing()).affectedKeys().hasOnly(['answer', 'answerType', 'status', 'answeredAt']) &&
+         incoming().status in ['answered', 'rejected'] &&
+         incoming().answeredAt == request.time) ||
+        isAdmin()
+      );
+    }
+
+    match /users/{userId}/follows/{clericId} {
+      allow read: if true;
+      allow create: if isOwner(userId) && isValidId(clericId) && exists(/databases/$(database)/documents/users/$(clericId));
+      allow delete: if isOwner(userId);
+    }
+
+    match /gratitude/{entryId} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && incoming().userId == request.auth.uid && incoming().createdAt == request.time;
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    match /sadaqah/{recordId} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && incoming().userId == request.auth.uid && incoming().createdAt == request.time;
+    }
+
+    match /community_stats/{statId} {
+      allow read: if true;
+      allow create: if isSignedIn() && statId == 'global' && 
+                    incoming().keys().hasAll(['totalPrayers', 'totalFasting', 'totalCharity', 'totalSmiles', 'totalDhikr', 'updatedAt']) &&
+                    incoming().keys().size() == 6;
+      allow update: if isSignedIn() && 
+                    incoming().diff(existing()).affectedKeys().hasOnly(['totalPrayers', 'totalFasting', 'totalCharity', 'totalSmiles', 'totalDhikr', 'updatedAt']) &&
+                    incoming().updatedAt == request.time;
+    }
+
+    match /admins/{userId} {
+      allow read: if isOwner(userId);
+    }
+
+    match /articles/{articleId} {
+      allow read: if true;
+      allow create, update: if isAdmin() && isValidArticle(incoming());
+      allow delete: if isAdmin();
+    }
+  }
+}
