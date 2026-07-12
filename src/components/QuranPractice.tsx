@@ -17,6 +17,7 @@ import { supabase } from '../lib/supabase';
 import { dbService } from '../services/dbService';
 import { ALL_SURAHS, fetchAyahContext } from '../data/quranExplorer';
 import { toast } from 'react-hot-toast';
+import { QuranReviewInline } from './QuranReviewInline';
 
 // Standardized structure for target verses
 interface VerseOption {
@@ -679,7 +680,7 @@ export const QuranPractice = () => {
       setCurrentScore(calculatedFluency);
       setIsProcessing(false);
       setRecState('finished');
-      setShowReviewSheet(true);
+      setShowReviewSheet(false);
 
       // Save session record immediately
       saveSessionRecord(errors, calculatedFluency, mistakes);
@@ -1186,8 +1187,46 @@ export const QuranPractice = () => {
               </div>
             )}
 
-            {/* Top Toolbar line */}
-            <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-8 pb-6 border-b border-white/5 relative z-10">
+            {recState === 'finished' ? (
+              <QuranReviewInline
+                selectedVerse={selectedVerse}
+                wordStates={wordStates}
+                currentScore={currentScore}
+                flaggedMistakes={flaggedMistakes}
+                isUserAudioPlaying={isUserAudioPlaying}
+                toggleUserAudioPlayback={toggleUserAudioPlayback}
+                isMasterAudioPlaying={isMasterAudioPlaying}
+                toggleMasterAudioPlayback={toggleMasterAudioPlayback}
+                sharedProgress={sharedProgress}
+                userCurrentTime={userCurrentTime}
+                masterCurrentTime={masterCurrentTime}
+                masterDuration={masterDuration}
+                playbackSpeed={playbackSpeed}
+                handleSpeedShift={handleSpeedShift}
+                isGeminiAnalyzing={isGeminiAnalyzing}
+                geminiAnalysis={geminiAnalysis}
+                isMultiAyahMode={isMultiAyahMode}
+                selectedSurahNum={selectedSurahNum}
+                selectedAyahNum={selectedAyahNum}
+                setSelectedSurahNum={setSelectedSurahNum}
+                setSelectedAyahNum={setSelectedAyahNum}
+                setSelectedVerse={setSelectedVerse}
+                setWordStates={setWordStates}
+                setCurrentScore={setCurrentScore}
+                setFlaggedMistakes={setFlaggedMistakes}
+                setLiveTranscript={setLiveTranscript}
+                setGeminiAnalysis={setGeminiAnalysis}
+                setRecState={setRecState}
+                resetPracticeState={resetPracticeState}
+                startRecordingFlow={startRecordingFlow}
+                setIsCustomMode={setIsCustomMode}
+                getDynamicVerseOption={getDynamicVerseOption}
+                ALL_SURAHS={ALL_SURAHS}
+              />
+            ) : (
+              <>
+                {/* Top Toolbar line */}
+                <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-8 pb-6 border-b border-white/5 relative z-10">
               
               {/* Selector Mode Toggle: Featured vs Custom */}
               <div className="flex items-center space-x-1.5 bg-white/[0.03] border border-white/5 p-1 rounded-xl">
@@ -1546,7 +1585,7 @@ export const QuranPractice = () => {
                         "text-3.5xl md:text-5xl font-serif font-semibold transition-all duration-300 pointer-events-none tracking-wide select-none pb-2 border-b-2 decoration-2",
                         state === 'correct'
                           ? "text-[#D4AF37] drop-shadow-[0_0_15px_rgba(212,175,55,0.45)] border-b-[#D4AF37]/45"
-                          : (isHideTextMode && recState !== 'finished')
+                          : isHideTextMode
                             ? "text-transparent bg-[radial-gradient(circle,rgba(212,175,55,0.2)_1.5px,transparent_1.5px)] bg-[length:12px_12px] border-b-[#D4AF37]/20 w-16 text-center select-none"
                             : state === 'incorrect'
                               ? "text-[#FF4D4D] border-b-[#FF4D4D]/45 line-through decoration-dotted animate-pulse font-normal"
@@ -1563,7 +1602,7 @@ export const QuranPractice = () => {
               {/* Translation Details */}
               <div className="mt-8 pt-6 border-t border-white/5 text-center space-y-2">
                 <p className="text-xs italic text-slate-400 leading-relaxed font-serif">{selectedVerse.transliteration}</p>
-                {(!isHideTextMode || recState === 'finished') && (
+                {!isHideTextMode && (
                   <p className="text-sm font-serif font-medium text-slate-300">"{selectedVerse.translation}"</p>
                 )}
                 <div className="pt-3.5 flex justify-center">
@@ -1651,11 +1690,7 @@ export const QuranPractice = () => {
                           />
                         </>
                       )}
-                      {!isRecording && recState === 'finished' && (
-                        <div className="absolute -top-1 -right-1 bg-emerald-500 w-6 h-6 rounded-full border border-[#1A1A1E] flex items-center justify-center text-white shadow-md">
-                          <Check size={12} className="stroke-[3px]" />
-                        </div>
-                      )}
+
                     </motion.button>
                   )}
                 </AnimatePresence>
@@ -1686,20 +1721,7 @@ export const QuranPractice = () => {
               </div>
             </div>
 
-            {/* Quick action button to trigger Review & Master Drawer Sheet */}
-            {recState === 'finished' && (
-              <motion.div 
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="mt-10 flex justify-center"
-              >
-                <button
-                  onClick={() => setShowReviewSheet(true)}
-                  className="bg-[#D4AF37]/10 hover:bg-[#D4AF37]/20 border border-[#D4AF37]/35 text-[#D4AF37] px-6 py-3.5 rounded-xl text-[9.5px] font-black uppercase tracking-widest transition-all hover:scale-105"
-                >
-                  Configure Review & Master Comparisons
-                </button>
-              </motion.div>
+              </>
             )}
           </div>
         </div>
@@ -1986,7 +2008,7 @@ export const QuranPractice = () => {
 
       {/* 2 & 3. DYNAMIC INTERACTIVE "REVIEW & MASTER" DRAWER BOTTOM SHEET */}
       <AnimatePresence>
-        {showReviewSheet && (
+        {false && (
           <div className="fixed inset-0 z-50 flex items-end justify-center">
             
             {/* Backdrop opacity */}
@@ -2220,14 +2242,14 @@ export const QuranPractice = () => {
                     <div className="p-4 bg-[#D4AF37]/5 border border-[#D4AF37]/15 rounded-2xl">
                       <span className="text-[8px] font-black uppercase text-[#D4AF37] block mb-1">Encouraging Master Feedback</span>
                       <p className="text-xs text-slate-300 italic font-serif leading-relaxed">
-                        "{geminiAnalysis.overallFeedback}"
+                        "{(geminiAnalysis as any).overallFeedback}"
                       </p>
                     </div>
 
-                    {geminiAnalysis.wordAnalyses.length > 0 ? (
+                    {(geminiAnalysis as any).wordAnalyses.length > 0 ? (
                       <div className="space-y-3">
                         <span className="text-[8px] font-black uppercase text-slate-500 block">Syllable correction breakdown (Nooraya highlight)</span>
-                        {geminiAnalysis.wordAnalyses.map((wa, i) => (
+                        {(geminiAnalysis as any).wordAnalyses.map((wa: any, i: number) => (
                           <div key={i} className="p-4 bg-white/[0.01] border border-white/5 rounded-2xl flex flex-col sm:flex-row justify-between sm:items-center gap-3">
                             <div>
                               <div className="flex items-center gap-2">
@@ -2265,7 +2287,7 @@ export const QuranPractice = () => {
               </div>
 
               {/* SHARABLE DIGITAL COMPLETIONS CERTIFICATE */}
-              {currentScore && currentScore >= 85 && (
+              {false && (
                 <div className="my-8 p-6 bg-gradient-to-br from-[#121214] to-[#1c180d] border-2 border-double border-[#D4AF37]/45 rounded-3xl text-center space-y-4 shadow-2xl relative overflow-hidden">
                   <div className="absolute -top-12 -right-12 w-28 h-28 bg-[#D4AF37]/5 rounded-full blur-3xl pointer-events-none" />
                   <div className="flex justify-center">
@@ -2274,7 +2296,7 @@ export const QuranPractice = () => {
                   <div>
                     <h4 className="text-[#D4AF37] font-serif font-black text-lg uppercase tracking-wider">Nooraya accredited Fluency Certificate</h4>
                     <p className="text-xs text-slate-300 mt-1 max-w-lg mx-auto font-serif leading-relaxed">
-                      "I hereby certify that on this day, the seeker recited the coordinates of <span className="text-[#D4AF37] font-bold font-sans">{selectedVerse.name}</span> with a certified fluency rating score of <span className="text-[#D4AF37] font-bold font-sans">{currentScore}%</span>."
+                      "I hereby certify that on this day, the seeker recited the coordinates of <span className="text-[#D4AF37] font-bold font-sans">{selectedVerse.name}</span> with a certified fluency rating score of <span className="text-[#D4AF37] font-bold font-sans">{currentScore!}%</span>."
                     </p>
                   </div>
                   <div className="flex justify-center gap-3">
