@@ -369,11 +369,27 @@ export const AlBayan: React.FC = () => {
     const storedHistory = localStorage.getItem('nooraya_listening_history');
     if (storedHistory) setListeningHistory(JSON.parse(storedHistory));
 
-    // Set Al-Fatihah 1 as default
-    const defaultSurah = ALL_SURAHS[0];
-    setSelectedSurah(defaultSurah);
-    setSelectedAyahNumber(1);
-    setActiveAyah(fetchAyahContext(1, 1));
+    // Set Al-Fatihah 1 as default (or read from deep-linked search parameters)
+    const paramSurahNum = searchParams.get('surah') ? Number(searchParams.get('surah')) : null;
+    const paramAyahNum = searchParams.get('ayah') ? Number(searchParams.get('ayah')) : null;
+    if (paramSurahNum && paramAyahNum) {
+      const matchS = ALL_SURAHS.find(s => s.number === paramSurahNum);
+      if (matchS) {
+        setSelectedSurah(matchS);
+        setSelectedAyahNumber(paramAyahNum);
+        setActiveAyah(fetchAyahContext(paramSurahNum, paramAyahNum));
+      } else {
+        const defaultSurah = ALL_SURAHS[0];
+        setSelectedSurah(defaultSurah);
+        setSelectedAyahNumber(1);
+        setActiveAyah(fetchAyahContext(1, 1));
+      }
+    } else {
+      const defaultSurah = ALL_SURAHS[0];
+      setSelectedSurah(defaultSurah);
+      setSelectedAyahNumber(1);
+      setActiveAyah(fetchAyahContext(1, 1));
+    }
 
     // Prepopulate AI Chat welcome
     setAiChatMessages([
@@ -467,25 +483,39 @@ export const AlBayan: React.FC = () => {
         setIsPlaying(false);
       });
       
-      audio.onended = () => {
-        // Handle repeat mode
-        if (repeatCount > 0 && currentRepeatCycle < repeatCount - 1) {
-          setCurrentRepeatCycle(prev => prev + 1);
-          audio.currentTime = 0;
-          audio.play().catch(() => setIsPlaying(false));
-        } else {
-          // Finished cycles. Move to next verse in Surah if possible
-          setCurrentRepeatCycle(0);
-          if (selectedSurah && activeAyah.ayahNumber < selectedSurah.numberOfAyahs) {
-            loadAyah(activeAyah.surahNumber, activeAyah.ayahNumber + 1);
-            setTimeout(() => {
-              setIsPlaying(true);
-            }, 100);
+      const handleEnded = () => {
+        try {
+          // Handle repeat mode
+          if (repeatCount > 0 && currentRepeatCycle < repeatCount - 1) {
+            setCurrentRepeatCycle(prev => prev + 1);
+            audio.currentTime = 0;
+            audio.play().catch(() => setIsPlaying(false));
           } else {
-            setIsPlaying(false);
+            // Finished cycles. Move to next verse in Surah if possible
+            setCurrentRepeatCycle(0);
+            if (selectedSurah && activeAyah && activeAyah.ayahNumber < selectedSurah.numberOfAyahs) {
+              loadAyah(activeAyah.surahNumber, activeAyah.ayahNumber + 1);
+              setTimeout(() => {
+                setIsPlaying(true);
+              }, 100);
+            } else {
+              // Option A (Reset View): Automatically reset progress seeker timeline bar back to 0:00,
+              // toggle the center icon from a 'Pause' icon back to a clickable 'Play' icon, and keep the user on the exact same player screen.
+              setIsPlaying(false);
+              setAudioCurrentTime(0);
+              audio.currentTime = 0;
+            }
           }
+        } catch (error) {
+          console.error("Critical error inside Al-Bayan player ended lifecycle:", error);
+          // Safely force the UI state back to the active 'Paused' screen layout rather than letting the screen go white or blank
+          setIsPlaying(false);
+          setAudioCurrentTime(0);
         }
       };
+
+      audio.onended = handleEnded;
+      audio.addEventListener('ended', handleEnded);
       
       reciterAudioRef.current = audio;
 
@@ -507,6 +537,7 @@ export const AlBayan: React.FC = () => {
         audio.removeEventListener('timeupdate', onTimeUpdate);
         audio.removeEventListener('loadedmetadata', onLoadedMetadata);
         audio.removeEventListener('durationchange', onLoadedMetadata);
+        audio.removeEventListener('ended', handleEnded);
         if (reciterAudioRef.current) reciterAudioRef.current.pause();
       };
     } else {

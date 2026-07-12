@@ -339,6 +339,7 @@ export const QuranPlayer: React.FC = () => {
   const [isAudioLoading, setIsAudioLoading] = useState<boolean>(false);
   const [isAssetFailed, setIsAssetFailed] = useState<boolean>(false);
   const [isUsingFallback, setIsUsingFallback] = useState<boolean>(false);
+  const [fallbackAttempt, setFallbackAttempt] = useState<number>(0);
   const [audioKey, setAudioKey] = useState<number>(0);
 
   // Restore cached high-fidelity file/image blobs on startup
@@ -378,6 +379,7 @@ export const QuranPlayer: React.FC = () => {
   // Reset fallback state when surah or reciter changes
   useEffect(() => {
     setIsUsingFallback(false);
+    setFallbackAttempt(0);
     setAudioKey(0);
   }, [selectedSurah, activeReciter]);
 
@@ -453,6 +455,42 @@ export const QuranPlayer: React.FC = () => {
     const audio = mainAudioRef.current;
     if (!audio) return;
 
+    const getSourcesForReciter = (reciterId: string, folderIndex: string): string[] => {
+      const sources: string[] = [];
+      if (reciterId === 'dossari') {
+        sources.push(
+          `https://download.quranicaudio.com/quran/yasser_ad-dussary/${folderIndex}.mp3`,
+          `https://server11.mp3quran.net/yasser/${folderIndex}.mp3`,
+          `https://everyayah.com/data/Yaser_Ad-Dussary_128kbps/${folderIndex}.mp3`
+        );
+      } else if (reciterId === 'afasy') {
+        sources.push(
+          `https://download.quranicaudio.com/quran/mishari_al_afasy/${folderIndex}.mp3`,
+          `https://server8.mp3quran.net/afs/${folderIndex}.mp3`,
+          `https://everyayah.com/data/Alafasy_128kbps/${folderIndex}.mp3`
+        );
+      } else if (reciterId === 'sudais') {
+        sources.push(
+          `https://download.quranicaudio.com/quran/abdurrahman_as-sudais/${folderIndex}.mp3`,
+          `https://server11.mp3quran.net/sds/${folderIndex}.mp3`,
+          `https://everyayah.com/data/Abdurrahmaan_As-Sudais_192kbps/${folderIndex}.mp3`
+        );
+      } else if (reciterId === 'muaiqly') {
+        sources.push(
+          `https://download.quranicaudio.com/quran/maher_al_muaiqly/${folderIndex}.mp3`,
+          `https://server12.mp3quran.net/maher/${folderIndex}.mp3`,
+          `https://everyayah.com/data/Maher_AlMuaiqly_64kbps/${folderIndex}.mp3`
+        );
+      } else if (reciterId === 'turki') {
+        sources.push(
+          `https://server16.mp3quran.net/bdr_trki/${folderIndex}.mp3`,
+          `https://backup.mp3quran.net/bdr_trki/${folderIndex}.mp3`,
+          `https://server12.mp3quran.net/bdr_trki/${folderIndex}.mp3`
+        );
+      }
+      return sources;
+    };
+
     const getTrackSource = () => {
       // 1. If we have a custom uploaded link in local memory/IndexedDB, use that first
       const key = `${activeReciter.id}_${selectedSurah.number}`;
@@ -461,38 +499,15 @@ export const QuranPlayer: React.FC = () => {
       }
 
       const folderIndex = String(selectedSurah.number).padStart(3, '0');
+      const sources = getSourcesForReciter(activeReciter.id, folderIndex);
 
-      // 2. Fall back to live high-fidelity mp3quran server links directly for non-custom/master reciters only
-      // if we are explicitly instructed to use fallback (bypasses browser CORS policy restricts)
-      if (isUsingFallback) {
-        if (activeReciter.id === 'turki') {
-          return `https://server16.mp3quran.net/bdr_trki/${folderIndex}.mp3`;
-        } else if (activeReciter.id === 'dossari') {
-          return `https://server11.mp3quran.net/yasser/${folderIndex}.mp3`;
-        } else if (activeReciter.id === 'afasy') {
-          return `https://server8.mp3quran.net/afs/${folderIndex}.mp3`;
-        } else if (activeReciter.id === 'sudais') {
-          return `https://server11.mp3quran.net/sds/${folderIndex}.mp3`;
-        } else if (activeReciter.id === 'muaiqly') {
-          return `https://server12.mp3quran.net/maher/${folderIndex}.mp3`;
-        }
+      if (sources.length > 0) {
+        // Clamp fallbackAttempt to index range
+        const sourceIndex = Math.min(fallbackAttempt, sources.length - 1);
+        return sources[sourceIndex];
       }
 
-      // 3. Under normal (non-fallback) conditions, route through high-fidelity, CORS-friendly CDN files to keep visualizer fully functional
-      if (activeReciter.id === 'dossari') {
-        return `https://download.quranicaudio.com/quran/yasser_ad-dussary/${folderIndex}.mp3`;
-      } else if (activeReciter.id === 'afasy') {
-        return `https://download.quranicaudio.com/quran/mishari_al_afasy/${folderIndex}.mp3`;
-      } else if (activeReciter.id === 'sudais') {
-        return `https://download.quranicaudio.com/quran/abdurrahman_as-sudais/${folderIndex}.mp3`;
-      } else if (activeReciter.id === 'muaiqly') {
-        return `https://download.quranicaudio.com/quran/maher_al_muaiqly/${folderIndex}.mp3`;
-      } else if (activeReciter.id === 'turki') {
-        // Fallback to Bader Turki mp3quran stream directly as primary
-        return `https://server16.mp3quran.net/bdr_trki/${folderIndex}.mp3`;
-      }
-
-      // 4. Custom files/assets folder fallback (if any exist)
+      // Default custom files/assets folder fallback (if any exist)
       const fileIndex = String(selectedSurah.number).padStart(3, '0');
       const base = activeReciter.surahFolder.endsWith('/') 
         ? activeReciter.surahFolder.slice(0, -1) 
@@ -502,7 +517,7 @@ export const QuranPlayer: React.FC = () => {
     };
 
     const targetSrc = getTrackSource();
-    const trackId = `${activeReciter.id}_${selectedSurah.number}_fallback_${isUsingFallback}`;
+    const trackId = `${activeReciter.id}_${selectedSurah.number}_fallback_${isUsingFallback}_attempt_${fallbackAttempt}`;
 
     if (loadedTrackRef.current !== trackId) {
       audio.pause();
@@ -511,7 +526,7 @@ export const QuranPlayer: React.FC = () => {
       loadedTrackRef.current = trackId;
       setAudioCurrentTime(0);
       setAudioDuration(0);
-      setIsAssetFailed(isUsingFallback);
+      setIsAssetFailed(isUsingFallback || fallbackAttempt > 0);
     }
 
     audio.playbackRate = playbackSpeed;
@@ -544,21 +559,23 @@ export const QuranPlayer: React.FC = () => {
     const onSeeked = () => setIsAudioLoading(false);
 
     const onAudioError = () => {
-      if (isUsingFallback) {
-         console.error("Critical: Fallback stream loading failed");
-         setIsPlaying(false);
-         setIsAudioLoading(false);
-         return;
+      const folderIndex = String(selectedSurah.number).padStart(3, '0');
+      const sources = getSourcesForReciter(activeReciter.id, folderIndex);
+      const nextAttempt = fallbackAttempt + 1;
+
+      if (nextAttempt < sources.length) {
+        console.warn(`Audio source failed at attempt ${fallbackAttempt}. Retrying with source index ${nextAttempt}.`);
+        setFallbackAttempt(nextAttempt);
+        setIsUsingFallback(true); // Disable crossOrigin elements restriction for fallback levels
+        setIsAssetFailed(true); // visualizer fallback to avoid blocks
+        setAudioKey(prev => prev + 1); // trigger remount
+        toast.success("Syncing alternative stream cache... Session resumed.");
+      } else {
+        console.error("Critical: Fallback stream loading failed");
+        setIsPlaying(false);
+        setIsAudioLoading(false);
+        toast.error("Audio stream currently unavailable on all global mirrors. Please try again later or link a custom audio track.");
       }
-
-      console.warn("Audio asset missing. Directing to dynamic stream fallback.");
-      setIsAssetFailed(true);
-      setIsAudioLoading(false);
-
-      // Recreate audio element dynamically to remove audio context visualizer bindings (bypasses crossOrigin blocks)
-      setAudioKey(prev => prev + 1);
-      setIsUsingFallback(true);
-      toast.success("Syncing with live stream cache... Session resumed.");
     };
 
     audio.addEventListener('timeupdate', onTimeUpdate);
@@ -573,20 +590,30 @@ export const QuranPlayer: React.FC = () => {
     audio.addEventListener('seeked', onSeeked);
     audio.addEventListener('error', onAudioError);
 
-    audio.onended = () => {
-      // Auto advance to next Surah
-      if (selectedSurah.number < 114) {
-        const nextNum = selectedSurah.number + 1;
-        const nextSur = ALL_SURAHS.find(s => s.number === nextNum);
-        if (nextSur) {
-          setSelectedSurah(nextSur);
-          setIsPlaying(true);
-          toast.success(`Advancing to Surah ${nextSur.englishName}`);
+    const handleEnded = () => {
+      try {
+        // Auto advance to next Surah
+        if (selectedSurah && selectedSurah.number < 114) {
+          const nextNum = selectedSurah.number + 1;
+          const nextSur = ALL_SURAHS.find(s => s.number === nextNum);
+          if (nextSur) {
+            setSelectedSurah(nextSur);
+            setIsPlaying(true);
+            toast.success(`Advancing to Surah ${nextSur.englishName}`);
+          } else {
+            setIsPlaying(false);
+          }
+        } else {
+          setIsPlaying(false);
         }
-      } else {
+      } catch (error) {
+        console.error("Critical error in QuranPlayer ended lifecycle:", error);
         setIsPlaying(false);
       }
     };
+
+    audio.onended = handleEnded;
+    audio.addEventListener('ended', handleEnded);
 
     if (isPlaying) {
       if (!isUsingFallback) {
@@ -612,6 +639,7 @@ export const QuranPlayer: React.FC = () => {
       audio.removeEventListener('seeking', onSeeking);
       audio.removeEventListener('seeked', onSeeked);
       audio.removeEventListener('error', onAudioError);
+      audio.removeEventListener('ended', handleEnded);
     };
   }, [isPlaying, playbackSpeed, selectedSurah, activeReciter, sessionBlobs, isUsingFallback, audioKey]);
 

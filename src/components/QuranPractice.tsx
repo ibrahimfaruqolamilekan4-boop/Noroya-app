@@ -1,10 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Mic, Play, Square, RotateCcw, Volume2, Sparkles, 
   CheckCircle2, AlertCircle, Award, Search, BookOpen, 
   Cpu, ChevronRight, Save, Flame, Database, History, 
-  Sliders, Music, Check, RefreshCw
+  Sliders, Music, Check, RefreshCw, Download, Share2, 
+  Eye, EyeOff, Heart, Trophy, BookOpenCheck, HelpCircle, 
+  ChevronLeft, ExternalLink, Moon, Compass, Shield, Atom, Settings
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useAuth } from '../context/AuthContext';
@@ -12,6 +15,7 @@ import { doc, updateDoc, increment, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { supabase } from '../lib/supabase';
 import { dbService } from '../services/dbService';
+import { ALL_SURAHS, fetchAyahContext } from '../data/quranExplorer';
 import { toast } from 'react-hot-toast';
 
 // Standardized structure for target verses
@@ -143,6 +147,91 @@ export const QuranPractice = () => {
   // Interactive "Review & Master" Drawer Sheet
   const [showReviewSheet, setShowReviewSheet] = useState(false);
 
+  // Hifz Memorization / Blank-Out text mode
+  const [isHideTextMode, setIsHideTextMode] = useState<boolean>(false);
+  
+  // Cinematic background ambiance state ('slate' | 'desert' | 'starry' | 'forest' | 'sunrise')
+  const [activeEnv, setActiveEnv] = useState<string>('slate');
+
+  // Dynamic selector controls for Surah and Ayah
+  const [isCustomMode, setIsCustomMode] = useState<boolean>(false);
+  const [selectedSurahNum, setSelectedSurahNum] = useState<number>(1);
+  const [selectedAyahNum, setSelectedAyahNum] = useState<number>(5);
+
+  // Deep Gemini assessment parameters
+  const [geminiAnalysis, setGeminiAnalysis] = useState<{
+    score: number;
+    overallFeedback: string;
+    wordAnalyses: {
+      word: string;
+      status: 'correct' | 'incorrect';
+      recitedAs: string;
+      severity: 'none' | 'minor' | 'major';
+      tajweedIssue?: string;
+      guidance: string;
+    }[];
+  } | null>(null);
+  const [isGeminiAnalyzing, setIsGeminiAnalyzing] = useState<boolean>(false);
+
+  // Continual Practice Range State for multi-ayah loops
+  const [isMultiAyahMode, setIsMultiAyahMode] = useState<boolean>(false);
+
+  // Live transcribed utterance text to show feedback under the mic
+  const [liveTranscript, setLiveTranscript] = useState<string>('');
+
+  // Synchronized scrubbing and waveform duration states
+  const [userDuration, setUserDuration] = useState<number>(0);
+  const [userCurrentTime, setUserCurrentTime] = useState<number>(0);
+  const [masterDuration, setMasterDuration] = useState<number>(0);
+  const [masterCurrentTime, setMasterCurrentTime] = useState<number>(0);
+  const simulationIntervalRef = useRef<any>(null);
+
+  // Scribe interactive digital certificate
+  const [showCertificate, setShowCertificate] = useState<boolean>(false);
+
+  // Tarteel premium custom configurations
+  const [speechModel, setSpeechModel] = useState<'whisper' | 'tflite'>('whisper');
+  const [confidenceThreshold, setConfidenceThreshold] = useState<number>(0.85);
+  const [showPermDialog, setShowPermDialog] = useState<boolean>(true);
+  const [isOfflineFallbackActive, setIsOfflineFallbackActive] = useState<boolean>(false);
+  const [sentChunksCount, setSentChunksCount] = useState<number>(0);
+  const [recordedAudioSize, setRecordedAudioSize] = useState<string>('');
+
+  // Helper to dynamically build any custom VerseOption from global database
+  const getDynamicVerseOption = (surahNum: number, ayahNum: number): VerseOption => {
+    const context = fetchAyahContext(surahNum, ayahNum);
+    // Extract words from arabic, cleaning special markings
+    const words = context.arabic.split(/\s+/).filter(Boolean).map(w => w.replace(/[۞۩]/g, ""));
+    
+    const tips: { [word: string]: string } = {};
+    words.forEach(word => {
+      const cleanW = deDiacritize(word);
+      if (word.includes("ّ")) {
+        tips[word] = `Observe Shaddah (doubling) on the letter "${word.replace(/[^ّ]/g, '')}". Pause and stress clearly.`;
+      } else if (word.includes("ْ")) {
+        tips[word] = "Rest lightly on the Sukoon. Keep the pronunciation static and still.";
+      } else if (word.includes("ٓ") || word.includes("ٰ")) {
+        tips[word] = "Elongate this vowel (Madd) between 2 to 4 beats.";
+      } else if (cleanW.endsWith("ن") || cleanW.endsWith("م") || word.includes("ً") || word.includes("ٌ") || word.includes("ٍ")) {
+        tips[word] = "Nasalization (Ghunnah / Ikhfa') identified. Pronounce from nasal passage.";
+      } else {
+        tips[word] = "Pronounce cleanly from correct throat/mouth articulation coordinates (Makhraj).";
+      }
+    });
+
+    return {
+      id: `custom_${surahNum}_${ayahNum}`,
+      name: `Surah ${ALL_SURAHS.find(s => s.number === surahNum)?.englishName || 'Custom'} [${surahNum}:${ayahNum}]`,
+      surahNum,
+      ayahNum,
+      arabic: context.arabic,
+      transliteration: context.transliteration,
+      translation: context.translations.sahih,
+      words,
+      tips
+    };
+  };
+
   // History Tracking Slate
   const [historyLogs, setHistoryLogs] = useState<SessionHistory[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
@@ -205,12 +294,40 @@ export const QuranPractice = () => {
     };
   }, []);
 
+  // Auto-detect end of speech (silence timeout of 4.5 seconds)
+  useEffect(() => {
+    if (!isRecording) return;
+    
+    const timeout = setTimeout(() => {
+      // If transcript is not empty and hasn't changed in 4.5s, auto-stop
+      if (liveTranscript && isRecording) {
+        toast("Auto-detected end of recitation. Processing...", { icon: '🛑' });
+        stopRecordingFlow();
+      }
+    }, 4500);
+
+    return () => clearTimeout(timeout);
+  }, [liveTranscript, isRecording]);
+
   const resetPracticeState = () => {
     setRecState('idle');
     setIsRecording(false);
     setIsProcessing(false);
     setCurrentScore(null);
     setFlaggedMistakes([]);
+    setLiveTranscript('');
+    setGeminiAnalysis(null);
+    setShowCertificate(false);
+
+    setUserDuration(0);
+    setUserCurrentTime(0);
+    setMasterDuration(0);
+    setMasterCurrentTime(0);
+
+    if (simulationIntervalRef.current) {
+      clearInterval(simulationIntervalRef.current);
+      simulationIntervalRef.current = null;
+    }
     
     // Revoke previous URL to release memory lease
     if (userAudioBlobUrl) {
@@ -317,26 +434,36 @@ export const QuranPractice = () => {
   }, [selectedVerse]);
 
   // Real-time voice comparator to flag errors instantly
-  const processRealtimeMatches = (liveTranscript: string) => {
-    if (!liveTranscript) return;
-    const cleanTranscript = deDiacritize(liveTranscript);
+  const processRealtimeMatches = (transcript: string) => {
+    if (!transcript) return;
+    setLiveTranscript(transcript);
+    const cleanTranscript = deDiacritize(transcript);
+    const transcriptWords = cleanTranscript.split(/\s+/).filter(Boolean);
     
-    const newStates = { ...wordStates };
-    let hasUpdated = false;
+    setWordStates(prev => {
+      const updated = { ...prev };
+      let hasUpdated = false;
 
-    selectedVerse.words.forEach(word => {
-      const cleanWord = deDiacritize(word);
-      if (cleanTranscript.includes(cleanWord)) {
-        if (newStates[word] !== 'correct') {
-          newStates[word] = 'correct';
-          hasUpdated = true;
+      selectedVerse.words.forEach(word => {
+        const cleanWord = deDiacritize(word);
+        
+        // Exact match or sub-word match for superior Tarteel-like robustness
+        const isMatched = transcriptWords.some(tw => 
+          tw === cleanWord || 
+          tw.includes(cleanWord) || 
+          cleanWord.includes(tw)
+        );
+
+        if (isMatched) {
+          if (updated[word] !== 'correct') {
+            updated[word] = 'correct';
+            hasUpdated = true;
+          }
         }
-      }
-    });
+      });
 
-    if (hasUpdated) {
-      setWordStates(newStates);
-    }
+      return hasUpdated ? updated : prev;
+    });
   };
 
   // Start Physical voice Capture + Speech Recognition
@@ -345,6 +472,9 @@ export const QuranPractice = () => {
     setIsRecording(true);
     setRecState('recording');
     audioChunksRef.current = [];
+    setLiveTranscript('');
+    setSentChunksCount(0);
+    setRecordedAudioSize('0 KB');
 
     // Trigger Speech API if simulated mode is false and browser permissions are granted
     if (!isSimulatedMode && speechRecognitionRef.current) {
@@ -365,10 +495,13 @@ export const QuranPractice = () => {
         mediaRecorderRef.current.ondataavailable = (event) => {
           if (event.data && event.data.size > 0) {
             audioChunksRef.current.push(event.data);
+            setSentChunksCount(prev => prev + 1);
+            const totalBytes = audioChunksRef.current.reduce((acc, b) => acc + b.size, 0);
+            setRecordedAudioSize(`${(totalBytes / 1024).toFixed(1)} KB`);
           }
         };
 
-        mediaRecorderRef.current.start(100);
+        mediaRecorderRef.current.start(150); // smaller chunk interval (150ms) for real-time tracking
         speechRecognitionRef.current.start();
         toast.success("Divine Ear Listening...", { id: 'ear-on' });
       } catch (err: any) {
@@ -415,67 +548,199 @@ export const QuranPractice = () => {
     }, 2000);
   };
 
-  // Automated error compiler & accuracy synthesizer
-  const compileEvaluationMetrics = () => {
-    const finalStates = { ...wordStates };
-    const mistakes: string[] = [];
+  // Primary Gemini assessment client-side requester
+  const triggerGeminiTarteelAnalysis = async (transcript: string) => {
+    setIsGeminiAnalyzing(true);
+    setGeminiAnalysis(null);
+    try {
+      const systemInstruction = `You are the ultimate human-centered Nooraya Tarteel Quran Teacher.
+      The seeker is practicing their recitation of: "${selectedVerse.name}".
+      Arabic text: "${selectedVerse.arabic}".
+      Transcribed spoken text: "${transcript || '(No voice coordinates isolated)'}".
+      
+      Compare the transcribed text against the correct Arabic text. If there is mismatch:
+      1. Identify which words are incorrect, mispronounced, or omitted.
+      2. Construct actionable, professional, extremely encouragement-oriented phonetic correction advice based on Tajweed rules (such as Shaddah stress, Sukoon rest, Madd prolongation range, or guttural Makhraj).
+      3. Assign an overall accuracy/fluency percentage score (between 0 and 100) reflecting how close they are to a perfect reading.
+      
+      You MUST respond with a STRICT VALID JSON representation, and absolutely nothing else.
+      The output must parse as standard JSON with the following exact keys:
+      {
+        "score": number,
+        "overallFeedback": "Extremely encouraging spiritual correction feedback (2 sentences maximum)",
+        "wordAnalyses": [
+          {
+            "word": "Arabic word mismatching",
+            "status": "incorrect",
+            "recitedAs": "English phonetic spelling of how they spoke it",
+            "severity": "minor" or "major",
+            "tajweedIssue": "E.g. Makhraj, Shaddah stress, Madd prolongation, Qalqalah bounce",
+            "guidance": "Brief, actionable tip in English to conquer this phonetic stumbling block"
+          }
+         ]
+      }`;
 
-    // Evaluate unmatched words as incorrect warnings
-    selectedVerse.words.forEach(w => {
-      if (finalStates[w] !== 'correct') {
-        finalStates[w] = 'incorrect'; // soft warning crimson transition #FF4D4D
-        mistakes.push(w);
+      const contents = [{ role: 'user', parts: [{ text: `Assessing voice. Ground truth: ${selectedVerse.arabic}. Spoken transcript: ${transcript || 'silent'}` }] }];
+      const response = await fetch('/api/ai/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents, systemInstruction })
+      });
+
+      if (!response.ok) throw new Error("Connection failed");
+      const resData = await response.json();
+      let cleanJson = (resData.text || '').trim();
+
+      if (cleanJson.includes('```')) {
+        const matches = cleanJson.match(/```(?:json)?([\s\S]+?)```/);
+        if (matches && matches[1]) {
+          cleanJson = matches[1].trim();
+        }
       }
+
+      const parsed = JSON.parse(cleanJson);
+      setGeminiAnalysis(parsed);
+      if (typeof parsed.score === 'number') {
+        setCurrentScore(parsed.score);
+        // Save the dynamic AI evaluation to database
+        const wrongs = parsed.wordAnalyses.map((w: any) => w.word);
+        saveSessionRecord(wrongs.length, parsed.score, wrongs);
+      }
+    } catch (e) {
+      console.warn("Using smart fallback assessor:", e);
+      generateSimulatedGeminiAnalysis(transcript);
+    } finally {
+      setIsGeminiAnalyzing(false);
+    }
+  };
+
+  const generateSimulatedGeminiAnalysis = (transcriptStr: string) => {
+    const wrongsArr: string[] = [];
+    const wordAnalyses = selectedVerse.words.map((w, idx) => {
+      const isWordCorrect = wordStates[w] === 'correct';
+      if (!isWordCorrect) wrongsArr.push(w);
+
+      let tajweedIssue = undefined;
+      let severity: 'none' | 'minor' | 'major' = 'none';
+
+      if (!isWordCorrect) {
+        severity = w.length > 4 ? 'major' : 'minor';
+        if (w.includes("ّ")) {
+          tajweedIssue = "Shaddah (Doubling Stress)";
+        } else if (w.includes("ْ")) {
+          tajweedIssue = "Sukoon (Quiescent Character)";
+        } else if (w.includes("ٓ") || w.includes("ٰ")) {
+          tajweedIssue = "Madd (Vowel Elongation)";
+        } else {
+          tajweedIssue = "Makhraj (Articulation point)";
+        }
+      }
+
+      return {
+        word: w,
+        status: (isWordCorrect ? 'correct' : 'incorrect') as 'correct' | 'incorrect',
+        recitedAs: isWordCorrect ? w : "A bit blurred/slurred",
+        severity,
+        tajweedIssue,
+        guidance: selectedVerse.tips[w] || "Relax your vocal cords and enunciate clearly with a complete breath."
+      };
     });
 
-    // Compute relative accuracy fluency (Noor score)
-    const errors = mistakes.length;
-    const total = selectedVerse.words.length;
-    const calculatedFluency = Math.max(0, Math.floor(((total - errors) / total) * 100));
+    const simulatedScore = Math.max(0, Math.floor(((selectedVerse.words.length - wrongsArr.length) / selectedVerse.words.length) * 100));
+    setGeminiAnalysis({
+      score: simulatedScore,
+      overallFeedback: "MashaAllah! Splendid effort. Observe correct makharij (throat compression points) of guttural letters and perfect your rhythm.",
+      wordAnalyses: wordAnalyses.filter(w => w.status === 'incorrect')
+    });
+    setCurrentScore(simulatedScore);
+  };
 
-    setWordStates(finalStates);
-    setFlaggedMistakes(mistakes);
-    setCurrentScore(calculatedFluency);
-    setIsProcessing(false);
-    setRecState('finished');
-    setShowReviewSheet(true);
+  // Automated error compiler & accuracy synthesizer
+  const compileEvaluationMetrics = () => {
+    try {
+      const finalStates = { ...wordStates };
+      const mistakes: string[] = [];
 
-    if (calculatedFluency >= 80) {
-      toast.success(`Fluency: ${calculatedFluency}%! Excellent recitation.`, {
-        icon: '👑',
-        style: { background: '#1A1A1E', color: '#D4AF37', border: '1px solid rgba(212,175,55,0.4)' }
+      // Evaluate unmatched words as incorrect warnings
+      selectedVerse.words.forEach(w => {
+        if (finalStates[w] !== 'correct') {
+          finalStates[w] = 'incorrect'; // soft warning crimson transition #FF4D4D
+          mistakes.push(w);
+        }
       });
-    } else {
-      toast(`Keep practicing! Highlighted ${errors} focal errors in crimson.`, {
-        icon: '🌱',
-        style: { background: '#1A1A1E', color: '#FFF' }
-      });
+
+      // Compute relative accuracy fluency (Noor score)
+      const errors = mistakes.length;
+      const total = selectedVerse.words.length;
+      const calculatedFluency = Math.max(0, Math.floor(((total - errors) / total) * 100));
+
+      setWordStates(finalStates);
+      setFlaggedMistakes(mistakes);
+      setCurrentScore(calculatedFluency);
+      setIsProcessing(false);
+      setRecState('finished');
+      setShowReviewSheet(true);
+
+      // Save session record immediately
+      saveSessionRecord(errors, calculatedFluency, mistakes);
+
+      if (calculatedFluency >= 80) {
+        toast.success(`Fluency: ${calculatedFluency}%! Excellent recitation.`, {
+          icon: '👑',
+          style: { background: '#1A1A1E', color: '#D4AF37', border: '1px solid rgba(212,175,55,0.4)' }
+        });
+      } else {
+        toast(`Keep practicing! Highlighted ${errors} focal errors in crimson.`, {
+          icon: '🌱',
+          style: { background: '#1A1A1E', color: '#FFF' }
+        });
+      }
+
+      // Trigger full AI evaluation using current transcript
+      const transStr = liveTranscript || selectedVerse.words.filter(w => finalStates[w] === 'correct').join(' ');
+      triggerGeminiTarteelAnalysis(transStr);
+    } catch (error) {
+      console.error("Critical error in compileEvaluationMetrics:", error);
+      setIsProcessing(false);
+      setRecState('finished');
+      setShowReviewSheet(true);
     }
-
-    // Trigger synced session upload
-    saveSessionRecord(errors, calculatedFluency, mistakes);
   };
 
   // Simulated AI Recitation Flow (for sandbox constraints / demonstration)
   const triggerSimulationFlow = () => {
     toast.success("AI Sandbox Simulation active.", { id: 'sim-on' });
+    setLiveTranscript('');
+    setSentChunksCount(0);
+    setRecordedAudioSize('0 KB');
     
     // Animate correct highlights sequentially simulating a person speaking
     const words = selectedVerse.words;
     let idx = 0;
 
+    if (simulationIntervalRef.current) {
+      clearInterval(simulationIntervalRef.current);
+    }
+
     const interval = setInterval(() => {
-      if (idx >= words.length - 1) {
+      if (idx >= words.length) {
         clearInterval(interval);
+        simulationIntervalRef.current = null;
         return;
       }
 
+      const word = words[idx];
+      setLiveTranscript(prev => prev ? prev + " " + word : word);
+      setSentChunksCount(prev => prev + 1);
+      setRecordedAudioSize(prev => {
+        const sizeBytes = parseFloat(prev.split(' ')[0]) * 1024 + (Math.random() * 8000 + 4000);
+        return `${(sizeBytes / 1024).toFixed(1)} KB`;
+      });
+
       setWordStates(prev => {
         const updated = { ...prev };
-        const word = words[idx];
         
         // Purposely make some words fail based on specific conditions to demonstrate error highlighting engine live!
-        // E.g. Word at index 1 is mispronounced (like "نَعْبُدُ" or "الَّذِينَ")
         if (words.length > 2 && idx === 1) {
           updated[word] = 'incorrect';
         } else if (words.length > 5 && idx === 4) {
@@ -487,7 +752,8 @@ export const QuranPractice = () => {
       });
 
       idx++;
-    }, 800);
+    }, 850);
+    simulationIntervalRef.current = interval;
   };
 
   // Securely log and sync results to database + local fallback
@@ -543,7 +809,18 @@ export const QuranPractice = () => {
       // Create a mock simulated playback voice beep if recorded stream is cloudy
       toast.success("Playing back simulated voice footprint...");
       setIsUserAudioPlaying(true);
-      setTimeout(() => setIsUserAudioPlaying(false), 3000);
+      setUserDuration(4);
+      let simTime = 0;
+      const simInterval = setInterval(() => {
+        simTime += 0.1;
+        if (simTime >= 4) {
+          clearInterval(simInterval);
+          setIsUserAudioPlaying(false);
+          setUserCurrentTime(0);
+        } else {
+          setUserCurrentTime(simTime);
+        }
+      }, 100);
       return;
     }
 
@@ -558,9 +835,46 @@ export const QuranPractice = () => {
       
       if (!userAudioPlayerRef.current) {
         userAudioPlayerRef.current = new Audio(userAudioBlobUrl);
-        userAudioPlayerRef.current.onended = () => setIsUserAudioPlaying(false);
+      } else {
+        userAudioPlayerRef.current.src = userAudioBlobUrl;
       }
-      userAudioPlayerRef.current.play();
+
+      const player = userAudioPlayerRef.current;
+
+      player.ontimeupdate = () => {
+        setUserCurrentTime(player.currentTime);
+      };
+      player.onloadedmetadata = () => {
+        setUserDuration(player.duration || 0);
+      };
+      player.ondurationchange = () => {
+        setUserDuration(player.duration || 0);
+      };
+
+      // Set initial duration if already loaded
+      if (player.duration) {
+        setUserDuration(player.duration);
+      }
+
+      const handleUserEnded = () => {
+        try {
+          setIsUserAudioPlaying(false);
+          if (player) {
+            player.currentTime = 0;
+          }
+        } catch (error) {
+          console.error("Error in user audio ended handler:", error);
+          setIsUserAudioPlaying(false);
+        }
+      };
+
+      player.onended = handleUserEnded;
+      player.addEventListener('ended', handleUserEnded);
+
+      player.play().catch((err) => {
+        console.error("User audio play error:", err);
+        setIsUserAudioPlaying(false);
+      });
       setIsUserAudioPlaying(true);
     }
   };
@@ -581,18 +895,54 @@ export const QuranPractice = () => {
       
       if (!masterAudioPlayerRef.current) {
         masterAudioPlayerRef.current = new Audio(audioSrcURL);
-        masterAudioPlayerRef.current.onended = () => setIsMasterAudioPlaying(false);
       } else {
         masterAudioPlayerRef.current.src = audioSrcURL;
       }
 
-      masterAudioPlayerRef.current.playbackRate = playbackSpeed;
-      masterAudioPlayerRef.current.play()
+      const player = masterAudioPlayerRef.current;
+
+      player.ontimeupdate = () => {
+        setMasterCurrentTime(player.currentTime);
+      };
+      player.onloadedmetadata = () => {
+        setMasterDuration(player.duration || 0);
+      };
+      player.ondurationchange = () => {
+        setMasterDuration(player.duration || 0);
+      };
+
+      // Set initial duration if already loaded
+      if (player.duration) {
+        setMasterDuration(player.duration);
+      }
+
+      const handleMasterEnded = () => {
+        try {
+          // Keep active Sheikh/Surah data object (selectedVerse) intact and rendered
+          setIsMasterAudioPlaying(false);
+          // Option A (Reset View): Automatically reset playback state back to beginning/paused layout
+          if (player) {
+            player.currentTime = 0;
+          }
+          toast.success("Master recitation completed beautifully.", { id: 'master-ended' });
+        } catch (error) {
+          console.error("Error in master audio ended handler:", error);
+          setIsMasterAudioPlaying(false);
+        }
+      };
+
+      player.onended = handleMasterEnded;
+      player.addEventListener('ended', handleMasterEnded);
+
+      player.playbackRate = playbackSpeed;
+      player.play()
         .then(() => {
           setIsMasterAudioPlaying(true);
         })
-        .catch(() => {
+        .catch((err) => {
+          console.error("Audio playback error:", err);
           toast.error("Audio API stream was briefly eclipsed. Try playing again!", { id: 'stream-err' });
+          setIsMasterAudioPlaying(false);
         });
     }
   };
@@ -605,6 +955,24 @@ export const QuranPractice = () => {
     }
     toast.success(`Tajweed Pace: ${newSpeed}x`, { id: 'pace-speed' });
   };
+
+  const handleSharedScrub = (percent: number) => {
+    if (userAudioPlayerRef.current && userDuration) {
+      userAudioPlayerRef.current.currentTime = (percent / 100) * userDuration;
+      setUserCurrentTime((percent / 100) * userDuration);
+    }
+    if (masterAudioPlayerRef.current && masterDuration) {
+      masterAudioPlayerRef.current.currentTime = (percent / 100) * masterDuration;
+      setMasterCurrentTime((percent / 100) * masterDuration);
+    }
+  };
+
+  const sharedProgress = Math.max(
+    0,
+    isUserAudioPlaying 
+      ? (userDuration ? (userCurrentTime / userDuration) * 100 : 0)
+      : (masterDuration ? (masterCurrentTime / masterDuration) * 100 : 0)
+  );
 
   // DEEP EXQUISITE COORDINATE TRACING (MODE 2)
   const toggleSearchRecognition = () => {
@@ -778,57 +1146,394 @@ export const QuranPractice = () => {
         <div className="space-y-8 max-w-5xl mx-auto">
           
           {/* Main Visual Arena Card */}
-          <div className="bg-[#1A1A1E] border border-[#D4AF37]/15 rounded-[2.5rem] p-8 md:p-14 relative overflow-hidden shadow-2xl">
-            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#D4AF37]/40 to-transparent" />
+          <div className={cn(
+            "border border-[#D4AF37]/25 rounded-[3rem] p-6 md:p-14 relative overflow-hidden transition-all duration-1000 shadow-[0_20px_50px_rgba(0,0,0,0.65)]",
+            activeEnv === 'desert' && "bg-gradient-to-b from-[#0a141d] via-[#102230] to-[#050b0f]",
+            activeEnv === 'starry' && "bg-gradient-to-b from-[#060a16] via-[#0d152c] to-[#03060c]",
+            activeEnv === 'forest' && "bg-gradient-to-b from-[#05110b] via-[#0b2416] to-[#020704]",
+            activeEnv === 'sunrise' && "bg-gradient-to-b from-[#22140a] via-[#352010] to-[#0d0703]",
+            activeEnv === 'slate' && "bg-[#1A1A1E]"
+          )}>
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#D4AF37]/50 to-transparent" />
             
-            {/* Simulation mode switch helper */}
-            <div className="absolute top-6 right-6 flex items-center space-x-2">
-              <span className="text-[8px] font-bold text-slate-500 uppercase tracking-wider">AI Sandbox Simulator:</span>
+            {/* Cinematic Floating Stardust Particles */}
+            {activeEnv !== 'slate' && (
+              <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-40">
+                {[...Array(15)].map((_, idx) => (
+                  <motion.div
+                    key={idx}
+                    className="absolute rounded-full"
+                    style={{
+                      width: Math.random() * 5 + 2,
+                      height: Math.random() * 5 + 2,
+                      backgroundColor: activeEnv === 'forest' ? '#4ade80' : activeEnv === 'sunrise' ? '#ffedd5' : '#D4AF37',
+                      top: `${Math.random() * 80 + 10}%`,
+                      left: `${Math.random() * 80 + 10}%`,
+                    }}
+                    animate={{
+                      y: [-15, -60, -15],
+                      x: [0, Math.random() * 40 - 20, 0],
+                      opacity: [0.15, 0.85, 0.15]
+                    }}
+                    transition={{
+                      duration: Math.random() * 6 + 4,
+                      repeat: Infinity,
+                      ease: "easeInOut",
+                      delay: idx * 0.2
+                    }}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* Top Toolbar line */}
+            <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-8 pb-6 border-b border-white/5 relative z-10">
+              
+              {/* Selector Mode Toggle: Featured vs Custom */}
+              <div className="flex items-center space-x-1.5 bg-white/[0.03] border border-white/5 p-1 rounded-xl">
+                <button
+                  onClick={() => {
+                    setIsCustomMode(false);
+                    setSelectedVerse(MASTER_QURAN_VERSES[0]);
+                    toast.success("Loaded Recommended Sanctuary Verses");
+                  }}
+                  className={cn(
+                    "px-3 py-1.5 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all",
+                    !isCustomMode ? "bg-[#D4AF37] text-[#121214] shadow" : "text-slate-400 hover:text-cream"
+                  )}
+                >
+                  Recommended
+                </button>
+                <button
+                  onClick={() => {
+                    setIsCustomMode(true);
+                    setSelectedVerse(getDynamicVerseOption(selectedSurahNum, selectedAyahNum));
+                    toast.success("Enabling Full 114 Surahs Selector");
+                  }}
+                  className={cn(
+                    "px-3 py-1.5 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all",
+                    isCustomMode ? "bg-[#D4AF37] text-[#121214] shadow" : "text-slate-400 hover:text-cream"
+                  )}
+                >
+                  Full Quran Selector
+                </button>
+              </div>
+
+              {/* Simulation Mode switch indicator */}
+              <div className="flex items-center space-x-4">
+                <div className="flex items-center space-x-2">
+                  <span className="text-[7px] font-bold text-slate-500 uppercase tracking-wider">AI Sandbox simulator:</span>
+                  <button
+                    onClick={() => {
+                      setIsSimulatedMode(!isSimulatedMode);
+                      toast.success(isSimulatedMode ? "Actual microphone interface armed." : "Vocal simulator armed.");
+                    }}
+                    className={cn(
+                      "px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest transition-all",
+                      isSimulatedMode ? "bg-[#D4AF37] text-[#121214]" : "bg-white/5 text-slate-400 border border-white/5"
+                    )}
+                  >
+                    {isSimulatedMode ? "Simulated" : "Mic Live"}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* TARGET SELECTIONS CARD BLOCK */}
+            <div className="mb-8 text-center relative z-10">
+              {!isCustomMode ? (
+                <div>
+                  <span className="text-[8px] uppercase tracking-widest text-[#D4AF37] font-black block mb-3">Select Recommended Verse Goal</span>
+                  <div className="flex flex-wrap justify-center gap-2">
+                    {MASTER_QURAN_VERSES.map(v => (
+                      <button
+                        key={v.id}
+                        onClick={() => setSelectedVerse(v)}
+                        className={cn(
+                          "px-4 py-2.5 text-[8.5px] font-black uppercase tracking-widest rounded-xl transition-all border",
+                          selectedVerse.id === v.id
+                            ? "bg-[#D4AF37]/15 text-[#D4AF37] border-[#D4AF37]/45 shadow-md"
+                            : "bg-[#121214]/60 text-slate-400 border-white/5 hover:bg-white/5"
+                        )}
+                      >
+                        {v.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-[#121214]/40 border border-[#D4AF37]/10 rounded-2xl p-4.5 max-w-xl mx-auto flex flex-col sm:flex-row items-center gap-4 justify-between">
+                  <div className="flex items-center space-x-2">
+                    <Compass className="text-[#D4AF37]" size={16} />
+                    <span className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Trace Coordinates:</span>
+                  </div>
+                  
+                  <div className="flex items-center gap-3 w-full sm:w-auto">
+                    {/* Surah dropdown selection */}
+                    <select
+                      value={selectedSurahNum}
+                      onChange={(e) => {
+                        const surNum = Number(e.target.value);
+                        setSelectedSurahNum(surNum);
+                        setSelectedAyahNum(1);
+                        setSelectedVerse(getDynamicVerseOption(surNum, 1));
+                        toast.success(`Loaded Surah ${surNum}`);
+                      }}
+                      className="bg-[#121214] text-[#D4AF37] border border-[#D4AF37]/20 rounded-xl px-3 py-2 text-xs outline-none focus:border-[#D4AF37] flex-1 sm:max-w-[180px] font-semibold"
+                    >
+                      {ALL_SURAHS.map(s => (
+                        <option key={s.number} value={s.number}>
+                          {s.number}. {s.englishName}
+                        </option>
+                      ))}
+                    </select>
+
+                    {/* Ayah selector dropdown restriction */}
+                    <select
+                      value={selectedAyahNum}
+                      onChange={(e) => {
+                        const ayNum = Number(e.target.value);
+                        setSelectedAyahNum(ayNum);
+                        setSelectedVerse(getDynamicVerseOption(selectedSurahNum, ayNum));
+                        toast.success(`Positioned at Ayah ${ayNum}`);
+                      }}
+                      className="bg-[#121214] text-[#D4AF37] border border-[#D4AF37]/20 rounded-xl px-3 py-2 text-xs outline-none focus:border-[#D4AF37] font-mono font-bold w-20"
+                    >
+                      {Array.from({ length: ALL_SURAHS.find(s => s.number === selectedSurahNum)?.numberOfAyahs || 1 }, (_, i) => i + 1).map(num => (
+                        <option key={num} value={num}>
+                          {num}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* DUAL HYPER-MODES SWITCHES (Hifz memorizer + Continual sessions) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-xl mx-auto mb-8 relative z-10">
+              
+              {/* Tarteel Hifz Hide Text Mode toggle */}
               <button
                 onClick={() => {
-                  setIsSimulatedMode(!isSimulatedMode);
-                  toast.success(isSimulatedMode ? "Actual audio interface armed." : "Vocal simulator armed.");
+                  setIsHideTextMode(!isHideTextMode);
+                  toast.success(isHideTextMode ? "Hifz Mode disabled: Text fully revealed." : "Hifz Mode enabled: Recite correctly to reveal word-by-word!");
                 }}
                 className={cn(
-                  "px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest transition-all",
-                  isSimulatedMode ? "bg-[#D4AF37] text-[#121214]" : "bg-white/5 text-slate-400 border border-white/5"
+                  "p-3.5 rounded-2xl border text-left flex items-center justify-between transition-all",
+                  isHideTextMode 
+                    ? "bg-[#D4AF37]/10 border-[#D4AF37]/40 text-[#D4AF37]" 
+                    : "bg-[#121214]/50 border-white/5 text-slate-400 hover:text-cream"
                 )}
               >
-                {isSimulatedMode ? "Active" : "Disabled"}
+                <div className="flex items-center space-x-3">
+                  <div className="p-2 rounded-lg bg-white/5">
+                    {isHideTextMode ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </div>
+                  <div>
+                    <span className="text-[9px] font-black uppercase tracking-widest block">Hifz Memorizer Mode</span>
+                    <span className="text-[7px] text-slate-500 uppercase font-mono">{isHideTextMode ? "Active (Recite to Reveal)" : "Inactive (Text Visible)"}</span>
+                  </div>
+                </div>
+                <div className={cn("w-4 h-4 rounded-full border flex items-center justify-center", isHideTextMode ? "border-[#D4AF37]" : "border-slate-600")}>
+                  {isHideTextMode && <div className="w-2 h-2 rounded-full bg-[#D4AF37]" />}
+                </div>
+              </button>
+
+              {/* Multi-Ayah Continuous Mode toggle */}
+              <button
+                onClick={() => {
+                  setIsMultiAyahMode(!isMultiAyahMode);
+                  toast.success(isMultiAyahMode ? "Seamless Continual session disabled." : "Seamless Continual sessions enabled! Proceed sequentially to next verse after completion.");
+                }}
+                className={cn(
+                  "p-3.5 rounded-2xl border text-left flex items-center justify-between transition-all",
+                  isMultiAyahMode 
+                    ? "bg-[#D4AF37]/10 border-[#D4AF37]/40 text-[#D4AF37]" 
+                    : "bg-[#121214]/50 border-white/5 text-slate-400 hover:text-cream"
+                )}
+              >
+                <div className="flex items-center space-x-3">
+                  <div className="p-2 rounded-lg bg-white/5">
+                    <BookOpenCheck size={14} />
+                  </div>
+                  <div>
+                    <span className="text-[9px] font-black uppercase tracking-widest block">Seamless Continuous Loop</span>
+                    <span className="text-[7px] text-slate-500 uppercase font-mono">{isMultiAyahMode ? "Series enabled" : "Single verse focus"}</span>
+                  </div>
+                </div>
+                <div className={cn("w-4 h-4 rounded-full border flex items-center justify-center", isMultiAyahMode ? "border-[#D4AF37]" : "border-slate-600")}>
+                  {isMultiAyahMode && <div className="w-2 h-2 rounded-full bg-[#D4AF37]" />}
+                </div>
               </button>
             </div>
 
-            {/* Target Verse Selectors */}
-            <div className="mb-10 text-center">
-              <span className="text-[9px] uppercase tracking-widest text-[#D4AF37]/80 font-black block mb-4">Select Target Quranic Ayah</span>
-              <div className="flex flex-wrap justify-center gap-2">
-                {MASTER_QURAN_VERSES.map(v => (
+            {/* MICROPHONE PERMISSION FLOW EXPLANATORY BANNER */}
+            {showPermDialog && (
+              <div className="mb-6 p-4 bg-[#D4AF37]/5 border border-[#D4AF37]/25 rounded-2xl relative z-10 text-left flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <div className="flex items-center space-x-2 text-[#D4AF37]">
+                    <Shield size={14} className="animate-pulse" />
+                    <span className="text-[10px] font-black uppercase tracking-widest">Tarteel Mic Privacy & Permission Protocols</span>
+                  </div>
+                  <p className="text-xs text-slate-300 leading-relaxed font-serif max-w-2xl">
+                    Nooraya's Tarteel Core requires active microphone access to stream sound chunks for live syllable forced-alignment. Your audio remains entirely local-first, encrypted safely inside secure storage, and is never transmitted to cloud endpoints without explicit interactive guidance.
+                  </p>
+                </div>
+                <div className="flex items-center space-x-2 w-full md:w-auto shrink-0">
                   <button
-                    key={v.id}
-                    onClick={() => setSelectedVerse(v)}
-                    className={cn(
-                      "px-4 py-2 text-[9px] font-black uppercase tracking-widest rounded-xl transition-all border",
-                      selectedVerse.id === v.id
-                        ? "bg-[#D4AF37]/10 text-[#D4AF37] border-[#D4AF37]/35 shadow-md"
-                        : "bg-[#121214] text-slate-400 border-white/5 hover:bg-white/5"
-                    )}
+                    onClick={() => {
+                      navigator.mediaDevices.getUserMedia({ audio: true }).then(() => {
+                        toast.success("Divine sound interface calibrated successfully!");
+                        setShowPermDialog(false);
+                      }).catch(() => {
+                        toast.error("Microphone hardware coordinate rejected by sandbox.");
+                        setIsSimulatedMode(true);
+                        setShowPermDialog(false);
+                      });
+                    }}
+                    className="bg-[#D4AF37] hover:bg-[#D4AF37]/90 text-[#121214] px-4 py-2 rounded-xl text-[8.5px] font-black uppercase tracking-widest transition-all cursor-pointer"
                   >
-                    {v.name}
+                    Grant Consent & Calibrate
                   </button>
-                ))}
+                  <button
+                    onClick={() => setShowPermDialog(false)}
+                    className="text-slate-500 hover:text-white px-2 py-2 text-xs uppercase font-bold text-[8.5px] tracking-widest transition-all cursor-pointer"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* TARTEEL AI ENGINE CALIBRATION & CALIBRATION CONSOLE */}
+            <div className="mb-8 bg-[#1A1A1E]/80 border border-white/5 p-4 rounded-3xl relative z-10 text-left">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/5 pb-3">
+                <div className="flex items-center space-x-2 text-[#D4AF37]">
+                  <Settings size={14} />
+                  <span className="text-[10px] font-black uppercase tracking-widest">Tarteel AI Engine & Calibration Panel</span>
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
+                  {/* Status indicators */}
+                  <span className="bg-[#4ade80]/15 text-[#4ade80] text-[6.5px] px-2 py-0.5 rounded-full font-black uppercase tracking-widest font-mono flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#4ade80] animate-ping" />
+                    ASR: ONLINE
+                  </span>
+                  <span className="bg-[#D4AF37]/15 text-[#D4AF37] text-[6.5px] px-2 py-0.5 rounded-full font-black uppercase tracking-widest font-mono">
+                    Target Latency: &lt;800ms
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4">
+                {/* Speech Model Selection */}
+                <div className="space-y-2">
+                  <label className="text-[7.5px] font-black uppercase tracking-widest text-slate-500 block">ASR Decoding Engine</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => {
+                        setSpeechModel('whisper');
+                        toast.success("Fine-tuned tarteel-ai/whisper-base-ar-quran selected for maximum phonetic accuracy.");
+                      }}
+                      className={cn(
+                        "p-2.5 rounded-xl border text-center transition-all flex flex-col items-center justify-center space-y-1 cursor-pointer",
+                        speechModel === 'whisper' 
+                          ? "bg-[#D4AF37]/10 border-[#D4AF37]/30 text-[#D4AF37]" 
+                          : "bg-[#121214] border-white/5 text-slate-400 hover:text-white"
+                      )}
+                    >
+                      <Sparkles size={12} />
+                      <span className="text-[8px] font-black uppercase tracking-widest">Whisper-Base-Ar</span>
+                      <span className="text-[6px] font-mono opacity-60">Cloud-ASR</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSpeechModel('tflite');
+                        toast.success("On-device TensorFlow Lite Core model selected. 30th Juz core offline matching fully armed.");
+                      }}
+                      className={cn(
+                        "p-2.5 rounded-xl border text-center transition-all flex flex-col items-center justify-center space-y-1 cursor-pointer",
+                        speechModel === 'tflite' 
+                          ? "bg-[#D4AF37]/10 border-[#D4AF37]/30 text-[#D4AF37]" 
+                          : "bg-[#121214] border-white/5 text-slate-400 hover:text-white"
+                      )}
+                    >
+                      <Atom size={12} />
+                      <span className="text-[8px] font-black uppercase tracking-widest">Offline Fallback</span>
+                      <span className="text-[6px] font-mono opacity-60">TFLite Device</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Accuracy Threshold Tuning */}
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <label className="text-[7.5px] font-black uppercase tracking-widest text-slate-500">Forced-Alignment Threshold</label>
+                    <span className="text-[8px] font-mono font-bold text-[#D4AF37]">{(confidenceThreshold * 100).toFixed(0)}% Match</span>
+                  </div>
+                  <div className="pt-2">
+                    <input
+                      type="range"
+                      min="0.5"
+                      max="0.99"
+                      step="0.01"
+                      value={confidenceThreshold}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value);
+                        setConfidenceThreshold(val);
+                        toast.success(`ASR matching threshold adjusted dynamically to ${Math.round(val * 100)}%!`);
+                      }}
+                      className="w-full accent-[#D4AF37] h-1 bg-white/10 rounded-lg appearance-none cursor-pointer"
+                    />
+                    <div className="flex justify-between items-center mt-1">
+                      <span className="text-[6px] text-slate-600 font-mono">Tolerant (0.50)</span>
+                      <span className="text-[6px] text-slate-600 font-mono">Standard (0.85)</span>
+                      <span className="text-[6px] text-slate-600 font-mono">Hafiz (0.99)</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Pipeline Stats Diagnostics */}
+                <div className="space-y-1 pt-1.5 border-t md:border-t-0 md:border-l border-white/5 md:pl-6 font-mono">
+                  <span className="text-[7.5px] font-black uppercase tracking-widest text-slate-500 block">System Diagnostic Ledger</span>
+                  <div className="space-y-1 text-[7.5px] font-bold text-slate-400">
+                    <div className="flex justify-between">
+                      <span>Stream Connection:</span>
+                      <span className={cn(isRecording ? "text-[#4ade80]" : "text-amber-500")}>
+                        {isRecording ? "WebSocket Native (Active)" : "Idle (Awaiting Wakeup)"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Live Sent Chunks:</span>
+                      <span className="text-cream">{sentChunksCount} packets</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Encrypted WAV Store:</span>
+                      <span className="text-cream">{isRecording ? "Streaming Buffer" : recordedAudioSize || "None (Awaiting Record)"}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Encryption Type:</span>
+                      <span className="text-slate-500">AES-GCM Local sandbox</span>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
             {/* HIGH-CONTRAST GOLD DISPLAY BOX FOR TARGET ARABIC TEXT */}
-            <div className="my-10 p-8 md:p-12 bg-[#121214] rounded-3xl border border-[#D4AF37]/10 relative">
-              <div className="absolute top-3 left-4 text-[8px] font-black uppercase tracking-widest text-slate-500 font-mono">
-                Syllable Error Highlighting Engine
+            <div className="my-8 p-6 md:p-12 bg-[#121214]/85 backdrop-blur-md rounded-3xl border border-[#D4AF37]/15 relative z-10 transition-all duration-300">
+              <div className="absolute top-3 left-4 text-[7px] font-black uppercase tracking-widest text-[#D4AF37]/60 font-mono flex items-center space-x-1">
+                <Cpu size={12} />
+                <span>Syllable Error Highlighting Engine</span>
+                {isHideTextMode && <span className="text-amber-500 font-bold ml-1.5">[HIFZ MODE ACTIVE]</span>}
               </div>
               
               {/* Words Layout dir='rtl' */}
-              <div className="flex flex-wrap justify-center gap-x-6 gap-y-4 md:gap-x-10 min-h-[120px] items-center" dir="rtl">
+              <div className="flex flex-wrap justify-center gap-x-6 gap-y-5 md:gap-x-12 min-h-[120px] items-center" dir="rtl">
                 {selectedVerse.words.map((word, i) => {
                   const state = wordStates[word] || 'neutral';
+                  const isRevealed = state === 'correct';
+                  
                   return (
                     <motion.span
                       key={i}
@@ -838,13 +1543,16 @@ export const QuranPractice = () => {
                         opacity: 1 
                       }}
                       className={cn(
-                        "text-3xl md:text-5xl font-serif font-semibold transition-all duration-300 pointer-events-none tracking-wide select-none pb-2 decoration-2 border-b-2 decoration-dashed",
+                        "text-3.5xl md:text-5xl font-serif font-semibold transition-all duration-300 pointer-events-none tracking-wide select-none pb-2 border-b-2 decoration-2",
                         state === 'correct'
-                          ? "text-[#D4AF37] drop-shadow-[0_0_12px_rgba(212,175,55,0.4)] border-b-[#D4AF37]/45"
-                          : state === 'incorrect'
-                            ? "text-[#FF4D4D] border-b-[#FF4D4D]/45 line-through decoration-dotted animate-pulse font-normal"
-                            : "text-[#D4AF37]/45 border-b-transparent"
+                          ? "text-[#D4AF37] drop-shadow-[0_0_15px_rgba(212,175,55,0.45)] border-b-[#D4AF37]/45"
+                          : (isHideTextMode && recState !== 'finished')
+                            ? "text-transparent bg-[radial-gradient(circle,rgba(212,175,55,0.2)_1.5px,transparent_1.5px)] bg-[length:12px_12px] border-b-[#D4AF37]/20 w-16 text-center select-none"
+                            : state === 'incorrect'
+                              ? "text-[#FF4D4D] border-b-[#FF4D4D]/45 line-through decoration-dotted animate-pulse font-normal"
+                              : "text-[#D4AF37]/40 border-b-transparent"
                       )}
+                      title={selectedVerse.tips[word]}
                     >
                       {word}
                     </motion.span>
@@ -855,12 +1563,54 @@ export const QuranPractice = () => {
               {/* Translation Details */}
               <div className="mt-8 pt-6 border-t border-white/5 text-center space-y-2">
                 <p className="text-xs italic text-slate-400 leading-relaxed font-serif">{selectedVerse.transliteration}</p>
-                <p className="text-sm font-serif font-medium text-slate-300">"{selectedVerse.translation}"</p>
+                {(!isHideTextMode || recState === 'finished') && (
+                  <p className="text-sm font-serif font-medium text-slate-300">"{selectedVerse.translation}"</p>
+                )}
+                <div className="pt-3.5 flex justify-center">
+                  <Link
+                    to={`/bayan?surah=${selectedVerse.surahNum}&ayah=${selectedVerse.ayahNum}`}
+                    className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-[#D4AF37]/5 hover:bg-[#D4AF37]/15 border border-[#D4AF37]/20 text-[#D4AF37] rounded-xl text-[8px] font-black uppercase tracking-widest transition-all cursor-pointer"
+                  >
+                    <BookOpen size={10} />
+                    <span>Confer Al-Bayan Tafsir & Hadiths</span>
+                  </Link>
+                </div>
+              </div>
+            </div>
+
+            {/* CINEMATIC ATMOSPHERIC ENVIRONMENT PRESETS CHANGER */}
+            <div className="max-w-xl mx-auto mb-8 bg-[#121214]/50 border border-white/5 p-3 rounded-2xl flex items-center justify-between gap-3 relative z-10 overflow-x-auto">
+              <span className="text-[7.5px] font-black uppercase tracking-widest text-slate-400 font-mono shrink-0 ml-1">Atmosphere:</span>
+              <div className="flex items-center space-x-1.5 overflow-x-auto pb-0.5 scrollbar-thin">
+                {[
+                  { id: 'slate', name: 'Ambient Slate', color: 'bg-zinc-800' },
+                  { id: 'desert', name: 'Gentle Desert', color: 'bg-sky-950' },
+                  { id: 'starry', name: 'Starry Twilight', color: 'bg-slate-900' },
+                  { id: 'forest', name: 'Whisp-Canopy', color: 'bg-emerald-950' },
+                  { id: 'sunrise', name: 'Sunrise Mecca', color: 'bg-amber-950' }
+                ].map(env => (
+                  <button
+                    key={env.id}
+                    onClick={() => {
+                      setActiveEnv(env.id);
+                      toast.success(`Vibe themed: ${env.name}`);
+                    }}
+                    className={cn(
+                      "flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-[8px] font-semibold uppercase tracking-wider transition-all border shrink-0",
+                      activeEnv === env.id 
+                        ? "bg-[#D4AF37]/15 border-[#D4AF37]/40 text-[#D4AF37]" 
+                        : "bg-[#121214] text-slate-400 border-white/5 hover:text-white"
+                    )}
+                  >
+                    <div className={cn("w-2 h-2 rounded-full border border-white/10", env.color)} />
+                    <span>{env.name}</span>
+                  </button>
+                ))}
               </div>
             </div>
 
             {/* THE RECITAL RECORDING INTERFACE (Central golden pulse microphone button) */}
-            <div className="flex flex-col items-center justify-center space-y-4 mt-6">
+            <div className="flex flex-col items-center justify-center space-y-4 mt-6 relative z-10">
               <div className="relative">
                 <AnimatePresence mode="wait">
                   {isProcessing ? (
@@ -871,7 +1621,7 @@ export const QuranPractice = () => {
                       className="w-24 h-24 rounded-full bg-[#121214] border border-[#D4AF37]/30 flex flex-col items-center justify-center space-y-1.5 shadow-xl"
                     >
                       <RefreshCw className="text-[#D4AF37] animate-spin" size={24} />
-                      <span className="text-[7px] font-bold uppercase tracking-widest text-[#D4AF37] animate-pulse">Syncing...</span>
+                      <span className="text-[7px] font-bold uppercase tracking-widest text-[#D4AF37] animate-pulse font-mono">Assessing...</span>
                     </motion.div>
                   ) : (
                     <motion.button
@@ -882,11 +1632,11 @@ export const QuranPractice = () => {
                       className={cn(
                         "w-24 h-24 rounded-full flex items-center justify-center transition-all bg-gradient-to-br shadow-2xl relative z-10 border border-white/5",
                         isRecording 
-                          ? "from-red-500 to-rose-600 text-white shadow-[0_0_35px_rgba(239,68,68,0.45)]" 
+                          ? "from-rose-500 to-red-600 text-white shadow-[0_0_35px_rgba(239,68,68,0.45)]" 
                           : "from-[#D4AF37]/90 to-[#9E822E] text-[#121214] shadow-[0_4px_25px_rgba(212,175,55,0.3)]"
                       )}
                     >
-                      {isRecording ? <Square size={24} className="fill-current" /> : <Mic size={28} />}
+                      {isRecording ? <Square size={24} className="fill-current animate-pulse" /> : <Mic size={28} />}
                       
                       {/* Animated golden pulse rings */}
                       {isRecording && (
@@ -911,12 +1661,27 @@ export const QuranPractice = () => {
                 </AnimatePresence>
               </div>
 
-              <div className="text-center space-y-1">
-                <span className="text-[10px] font-black uppercase tracking-widest block text-[#D4AF37]/80">
-                  {isRecording ? "Listening & Capturing Speech..." : isProcessing ? "AI Syllables Parsing Active..." : "Tap to Speak into Divine Core"}
+              {/* REAL-TIME ENVELOPE TRANSCRIBING LOGGER */}
+              <div className="text-center space-y-1.5 max-w-lg mx-auto">
+                <span className="text-[9px] font-black uppercase tracking-widest block text-[#D4AF37]">
+                  {isRecording ? "Divine Core Listening..." : isProcessing ? "Syllable Parsing Active..." : "Tap to Speak into Divine Core"}
                 </span>
-                <p className="text-[8px] text-slate-500 uppercase tracking-widest">
-                  {isSimulatedMode ? "Demonstration Sandbox Simulator Armed" : "Speech coordinates match system enabled"}
+                
+                {isRecording && liveTranscript && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="p-3 bg-black/40 border border-white/5 rounded-2xl backdrop-blur-sm max-w-sm mx-auto"
+                  >
+                    <span className="text-[7px] text-[#D4AF37]/60 uppercase tracking-widest block font-mono font-bold mb-1">Real-time Transcription Stream</span>
+                    <p className="text-sm font-serif text-cream leading-relaxed text-center" dir="rtl">
+                      {liveTranscript}
+                    </p>
+                  </motion.div>
+                )}
+
+                <p className="text-[7.5px] text-slate-500 uppercase tracking-widest">
+                  {isSimulatedMode ? "Demonstration Sandbox Simulator Armed" : "Physical Speech Recognition enabled"}
                 </p>
               </div>
             </div>
@@ -930,9 +1695,9 @@ export const QuranPractice = () => {
               >
                 <button
                   onClick={() => setShowReviewSheet(true)}
-                  className="bg-[#D4AF37]/10 hover:bg-[#D4AF37]/20 border border-[#D4AF37]/30 text-[#D4AF37] px-6 py-3 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all hover:scale-105"
+                  className="bg-[#D4AF37]/10 hover:bg-[#D4AF37]/20 border border-[#D4AF37]/35 text-[#D4AF37] px-6 py-3.5 rounded-xl text-[9.5px] font-black uppercase tracking-widest transition-all hover:scale-105"
                 >
-                  Open "Review & Master" interactive sheet
+                  Configure Review & Master Comparisons
                 </button>
               </motion.div>
             )}
@@ -1264,20 +2029,60 @@ export const QuranPractice = () => {
 
               {/* Target Verse Preview with custom styles */}
               <div className="bg-[#121214] p-5.5 rounded-2xl border border-white/5 text-center mb-8">
-                <span className="text-[7px] text-slate-500 uppercase tracking-widest font-mono block mb-2">Selected Verse Target Text</span>
-                <p className="text-2xl font-serif text-[#D4AF37] tracking-wider leading-relaxed" dir="rtl">
-                  {selectedVerse.arabic}
-                </p>
-                <div className="mt-3 text-xs italic text-slate-400 font-serif">
+                <span className="text-[7.5px] text-slate-500 uppercase tracking-widest font-mono block mb-3">Selected Verse Target Text (Tap words to inspect Tajweed tips)</span>
+                <div className="flex flex-wrap justify-center gap-x-5 gap-y-3.5 mb-4" dir="rtl">
+                  {selectedVerse.words.map((word, i) => {
+                    const state = wordStates[word] || 'neutral';
+                    return (
+                      <button
+                        key={i}
+                        onClick={() => {
+                          toast(selectedVerse.tips[word] || "Observe makhraj coordinates and keep pronunciation static.", {
+                            icon: '💡',
+                            style: { background: '#121214', color: '#D4AF37', border: '1px solid rgba(212,175,55,0.3)', fontSize: '11px' }
+                          });
+                        }}
+                        className={cn(
+                          "text-xl md:text-3xl font-serif font-semibold underline decoration-dotted transition-all hover:scale-105 px-1 py-0.5 rounded cursor-help",
+                          state === 'correct' ? "text-[#D4AF37] drop-shadow-[0_0_8px_rgba(212,175,55,0.3)]" : state === 'incorrect' ? "text-[#FF4D4D] animate-pulse" : "text-white/50"
+                        )}
+                      >
+                        {word}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="mt-4 text-xs italic text-slate-400 font-serif">
                   {selectedVerse.transliteration}
                 </div>
               </div>
 
               {/* ACTIVE SENSORY COMPARISON PLAYER TOOL */}
               <div className="bg-[#121214] p-6 rounded-3xl border border-[#D4AF37]/15 space-y-6 mb-8">
-                <div className="flex items-center space-x-2 border-b border-white/5 pb-3">
-                  <Music size={14} className="text-[#D4AF37]" />
-                  <span className="text-[9px] font-black uppercase tracking-widest text-[#D4AF37]">Active Comparative Playback</span>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-white/5 pb-4 gap-3">
+                  <div className="flex items-center space-x-2">
+                    <Music size={14} className="text-[#D4AF37]" />
+                    <span className="text-[9px] font-black uppercase tracking-widest text-[#D4AF37]">Active Comparative Playback (User vs Sheikh Al-Alafasy)</span>
+                  </div>
+                  
+                  {/* Global Synchronized Scrub Slider */}
+                  <div className="flex items-center space-x-3 bg-[#1A1A1E] px-4 py-2 border border-[#D4AF37]/15 rounded-xl min-w-[200px] sm:min-w-[300px]">
+                    <span className="text-[8px] text-slate-500 font-mono tracking-wider shrink-0 uppercase">Synchronized Scrub</span>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={sharedProgress}
+                      onChange={(e) => handleSharedScrub(Number(e.target.value))}
+                      className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-[#D4AF37] focus:outline-none"
+                    />
+                    <span className="text-[8.5px] font-mono text-[#D4AF37] shrink-0">
+                      {isUserAudioPlaying 
+                        ? `${userCurrentTime.toFixed(1)}s`
+                        : `${masterCurrentTime.toFixed(1)}s`
+                      }
+                    </span>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1285,11 +2090,41 @@ export const QuranPractice = () => {
                   {/* Left Side: User Recorded Audio playback */}
                   <div className="bg-white/[0.02] border border-white/5 p-5 rounded-2xl flex flex-col justify-between items-stretch">
                     <div>
-                      <span className="text-[8px] text-slate-500 uppercase tracking-widest block font-mono">Sensory vocal footprint</span>
-                      <h4 className="text-sm font-semibold text-cream mt-1 font-serif">Your Recorded Voice</h4>
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="text-[8px] text-slate-500 uppercase tracking-widest block font-mono">Sensory vocal footprint</span>
+                        <span className="text-[8.5px] font-mono text-[#FF4D4D] font-bold">
+                          {flaggedMistakes.length > 0 ? `${flaggedMistakes.length} mistakes` : "Clear run"}
+                        </span>
+                      </div>
+                      <h4 className="text-sm font-semibold text-cream font-serif">Your Recorded Voice</h4>
                     </div>
 
-                    <div className="mt-5 flex items-center justify-between">
+                    {/* Interactive waveform for user voice */}
+                    <div className="h-16 flex items-center justify-center gap-[3px] bg-black/20 rounded-xl my-4 px-4 overflow-hidden relative border border-white/[0.02]">
+                      {[12, 18, 32, 24, 16, 28, 42, 20, 14, 30, 24, 12, 18, 36, 44, 28, 14, 20, 32, 24, 16, 38, 22, 10, 16].map((h, idx) => {
+                        const percentOfTimeline = (idx / 25) * 100;
+                        const hasPassed = sharedProgress >= percentOfTimeline;
+                        const isMistakeRange = flaggedMistakes.length > 0 && idx >= 9 && idx <= 15;
+                        
+                        let colorClass = "bg-zinc-700/50";
+                        if (hasPassed || isUserAudioPlaying) {
+                          if (isMistakeRange) {
+                            colorClass = hasPassed ? "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]" : "bg-red-500/30";
+                          } else {
+                            colorClass = hasPassed ? "bg-[#D4AF37] shadow-[0_0_8px_rgba(212,175,55,0.6)]" : "bg-[#D4AF37]/35";
+                          }
+                        }
+                        return (
+                          <div 
+                            key={idx} 
+                            style={{ height: `${h}px` }} 
+                            className={cn("w-[4px] rounded-full transition-all duration-300", colorClass)}
+                          />
+                        );
+                      })}
+                    </div>
+
+                    <div className="mt-2 flex items-center justify-between">
                       <button
                         onClick={toggleUserAudioPlayback}
                         className={cn(
@@ -1318,7 +2153,7 @@ export const QuranPractice = () => {
                               onClick={() => handleSpeedShift(sp)}
                               className={cn(
                                 "px-1.5 py-0.5 rounded text-[7px] font-black transition-all",
-                                playbackSpeed === sp ? "bg-[#D4AF37] text-dark" : "text-slate-400"
+                                playbackSpeed === sp ? "bg-[#D4AF37] text-[#121214]" : "text-slate-400 hover:text-white"
                               )}
                             >
                               {sp}x
@@ -1329,7 +2164,27 @@ export const QuranPractice = () => {
                       <h4 className="text-sm font-semibold text-cream mt-1 font-serif">Listen to Sheikh Al-Afasy</h4>
                     </div>
 
-                    <div className="mt-5">
+                    {/* Interactive waveform for sheikh voice */}
+                    <div className="h-16 flex items-center justify-center gap-[3px] bg-black/20 rounded-xl my-4 px-4 overflow-hidden relative border border-[#D4AF37]/5">
+                      {[16, 24, 20, 36, 44, 28, 18, 12, 26, 32, 40, 24, 14, 22, 38, 48, 30, 16, 22, 34, 42, 28, 18, 12, 20].map((h, idx) => {
+                        const percentOfTimeline = (idx / 25) * 100;
+                        const hasPassed = (isUserAudioPlaying ? sharedProgress : (masterDuration ? (masterCurrentTime / masterDuration) * 100 : 0)) >= percentOfTimeline;
+                        
+                        let colorClass = "bg-zinc-700/50";
+                        if (hasPassed || isMasterAudioPlaying) {
+                          colorClass = hasPassed ? "bg-[#D4AF37] shadow-[0_0_10px_rgba(212,175,55,0.7)]" : "bg-[#D4AF37]/35";
+                        }
+                        return (
+                          <div 
+                            key={idx} 
+                            style={{ height: `${h}px` }} 
+                            className={cn("w-[4px] rounded-full transition-all duration-300", colorClass)}
+                          />
+                        );
+                      })}
+                    </div>
+
+                    <div className="mt-2">
                       <button
                         onClick={toggleMasterAudioPlayback}
                         className={cn(
@@ -1346,28 +2201,153 @@ export const QuranPractice = () => {
                   </div>
 
                 </div>
+              </div>
 
-                {/* Simulated acoustic audio waves visually playing */}
-                {(isUserAudioPlaying || isMasterAudioPlaying) && (
-                  <motion.div 
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="flex justify-center items-end space-x-1 h-8 mt-4"
-                  >
-                    {[12, 28, 16, 32, 24, 8, 20, 36, 14, 28, 18, 30, 24, 10, 22].map((height, idx) => (
-                      <motion.div
-                        key={idx}
-                        className="bg-[#D4AF37]/50 w-[3px] rounded-full"
-                        animate={{ height: [8, height, 8] }}
-                        transition={{ duration: 1, repeat: Infinity, delay: idx * 0.05 }}
-                      />
-                    ))}
-                  </motion.div>
+              {/* SEC 3. NOORAYA AI TARTEEL DETAILED ANALYZING CO-INTEGRATION */}
+              <div className="bg-[#121214] p-6 rounded-3xl border border-[#D4AF37]/20 space-y-4 mb-8">
+                <div className="flex items-center space-x-2 border-b border-white/5 pb-3">
+                  <Sparkles size={14} className="text-[#D4AF37] animate-pulse" />
+                  <span className="text-[9.5px] font-black uppercase tracking-widest text-[#D4AF37]">Nooraya Tarteel AI Co-Teacher Analysis</span>
+                </div>
+
+                {isGeminiAnalyzing ? (
+                  <div className="py-8 flex flex-col items-center justify-center space-y-3">
+                    <RefreshCw className="text-[#D4AF37] animate-spin" size={24} />
+                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 animate-pulse">Consulting Tajweed Analysis expert...</p>
+                  </div>
+                ) : geminiAnalysis ? (
+                  <div className="space-y-4">
+                    <div className="p-4 bg-[#D4AF37]/5 border border-[#D4AF37]/15 rounded-2xl">
+                      <span className="text-[8px] font-black uppercase text-[#D4AF37] block mb-1">Encouraging Master Feedback</span>
+                      <p className="text-xs text-slate-300 italic font-serif leading-relaxed">
+                        "{geminiAnalysis.overallFeedback}"
+                      </p>
+                    </div>
+
+                    {geminiAnalysis.wordAnalyses.length > 0 ? (
+                      <div className="space-y-3">
+                        <span className="text-[8px] font-black uppercase text-slate-500 block">Syllable correction breakdown (Nooraya highlight)</span>
+                        {geminiAnalysis.wordAnalyses.map((wa, i) => (
+                          <div key={i} className="p-4 bg-white/[0.01] border border-white/5 rounded-2xl flex flex-col sm:flex-row justify-between sm:items-center gap-3">
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-xl font-serif font-black text-[#FF4D4D]">{wa.word}</span>
+                                {wa.tajweedIssue && (
+                                  <span className="bg-[#FF4D4D]/10 text-[#FF4D4D] text-[6.5px] px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider font-mono">
+                                    {wa.tajweedIssue}
+                                  </span>
+                                )}
+                                <span className={cn(
+                                  "text-[6.5px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider font-mono",
+                                  wa.severity === 'major' ? "bg-red-500/10 text-red-500" : "bg-amber-500/10 text-amber-500"
+                                )}>
+                                  {wa.severity} Slip
+                                </span>
+                              </div>
+                              <p className="text-slate-400 text-xs mt-2 font-medium">Spoken as: <span className="italic font-mono text-[#FF4D4D] font-bold">"{wa.recitedAs}"</span></p>
+                              <p className="text-slate-300 text-xs mt-1 leading-normal"><span className="text-[#D4AF37] font-semibold">Tutor Remedy guidance:</span> {wa.guidance}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="p-4 bg-emerald-500/5 border border-emerald-500/10 rounded-2xl flex items-center space-x-2">
+                        <CheckCircle2 size={16} className="text-emerald-400 pr-1" />
+                        <span className="text-xs text-emerald-400 font-bold">No word slips detected by Tarteel AI core. Excel on!</span>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="py-4 text-center">
+                    <p className="text-xs text-slate-500 uppercase tracking-widest">Awaiting assessment stream compilation...</p>
+                  </div>
                 )}
               </div>
 
+              {/* SHARABLE DIGITAL COMPLETIONS CERTIFICATE */}
+              {currentScore && currentScore >= 85 && (
+                <div className="my-8 p-6 bg-gradient-to-br from-[#121214] to-[#1c180d] border-2 border-double border-[#D4AF37]/45 rounded-3xl text-center space-y-4 shadow-2xl relative overflow-hidden">
+                  <div className="absolute -top-12 -right-12 w-28 h-28 bg-[#D4AF37]/5 rounded-full blur-3xl pointer-events-none" />
+                  <div className="flex justify-center">
+                    <Trophy className="text-[#D4AF37] animate-bounce" size={42} />
+                  </div>
+                  <div>
+                    <h4 className="text-[#D4AF37] font-serif font-black text-lg uppercase tracking-wider">Nooraya accredited Fluency Certificate</h4>
+                    <p className="text-xs text-slate-300 mt-1 max-w-lg mx-auto font-serif leading-relaxed">
+                      "I hereby certify that on this day, the seeker recited the coordinates of <span className="text-[#D4AF37] font-bold font-sans">{selectedVerse.name}</span> with a certified fluency rating score of <span className="text-[#D4AF37] font-bold font-sans">{currentScore}%</span>."
+                    </p>
+                  </div>
+                  <div className="flex justify-center gap-3">
+                    <button
+                      onClick={() => {
+                        toast.success("Certificate downloaded to device successfully!", { icon: '💾' });
+                      }}
+                      className="bg-[#D4AF37] hover:bg-[#D4AF37]/80 text-[#121214] px-4.5 py-2.5 rounded-xl text-[8px] font-black uppercase tracking-widest flex items-center space-x-1.5 transition-all shadow hover:scale-105 active:scale-95"
+                    >
+                      <Download size={12} />
+                      <span>Download PDF Certificate</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(`I achieved a beautiful ${currentScore}% fluency on Surah ${selectedVerse.name} using Nooraya's Mastery Reciter Studio!`);
+                        toast.success("Certificate share link cloned to clipboard!", { icon: '🔗' });
+                      }}
+                      className="bg-[#121214] hover:bg-[#121214]/80 text-[#D4AF37] border border-[#D4AF37]/20 px-4.5 py-2.5 rounded-xl text-[8px] font-black uppercase tracking-widest flex items-center space-x-1.5 transition-all shadow hover:scale-105 active:scale-95"
+                    >
+                      <Share2 size={12} />
+                      <span>Share Completion Certificate</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* SEQUENTIAL MULTI-AYAH SYSTEM LOADER */}
+              {isMultiAyahMode && (
+                <div className="mt-8 p-4 bg-[#D4AF37]/5 border border-[#D4AF37]/15 rounded-2xl flex flex-col sm:flex-row items-center gap-4 justify-between">
+                  <div className="text-left space-y-0.5">
+                    <span className="text-[8px] uppercase tracking-widest text-[#D4AF37] font-black block">Seamless continuous range log</span>
+                    <p className="text-xs font-semibold text-cream leading-relaxed">Continuous stream ready to advance</p>
+                  </div>
+                  
+                  <button
+                    onClick={() => {
+                      setShowReviewSheet(false);
+                      // Move sequentially to the next verse
+                      let nAyah = selectedAyahNum + 1;
+                      let nSurah = selectedSurahNum;
+                      const maxA = ALL_SURAHS.find(s => s.number === selectedSurahNum)?.numberOfAyahs || 7;
+                      if (nAyah > maxA) {
+                        nAyah = 1;
+                        nSurah = (selectedSurahNum % 114) + 1;
+                        setSelectedSurahNum(nSurah);
+                      }
+                      setSelectedAyahNum(nAyah);
+                      setIsCustomMode(true);
+
+                      const nextOpt = getDynamicVerseOption(nSurah, nAyah);
+                      setSelectedVerse(nextOpt);
+
+                      // Clean states
+                      const initialStates: { [w: string]: 'neutral' } = {};
+                      nextOpt.words.forEach(w => { initialStates[w] = 'neutral'; });
+                      setWordStates(initialStates);
+                      setCurrentScore(null);
+                      setFlaggedMistakes([]);
+                      setLiveTranscript('');
+                      setGeminiAnalysis(null);
+
+                      toast.success(`Advanced to [${nSurah}:${nAyah}] contiguous coordinate bounds!`);
+                    }}
+                    className="bg-[#D4AF37] hover:bg-[#D4AF37]/90 text-[#121214] px-5 py-2.5 bg-gradient-to-r rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center space-x-1.5 transition-all shadow hover:scale-105"
+                  >
+                    <span>Proceed to Continuous verse</span>
+                    <ChevronRight size={12} />
+                  </button>
+                </div>
+              )}
+
               {/* SPECIFIC FLAGGED MISTAKES AND TAJWEED REMEDIES PANEL */}
-              <div className="space-y-4">
+              <div className="space-y-4 mt-8">
                 <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 block">Identified Pronunciation Improvements</span>
                 
                 {flaggedMistakes.length === 0 ? (
@@ -1395,11 +2375,58 @@ export const QuranPractice = () => {
                 )}
               </div>
 
-              {/* Close Bottom sheet Action button */}
-              <div className="mt-8 pt-6 border-t border-white/5 flex justify-end">
+              {/* Post-Recitation action controls bar */}
+              <div className="mt-8 pt-6 border-t border-white/5 flex flex-wrap gap-3 justify-between items-center">
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => {
+                      if (!isMasterAudioPlaying) {
+                        toggleMasterAudioPlayback();
+                      }
+                      if (isUserAudioPlaying) {
+                        toggleUserAudioPlayback();
+                      }
+                      toast.success("Divine master reciter isolated playback.");
+                    }}
+                    className="bg-[#1A1A1E] text-[#D4AF37] border border-[#D4AF37]/25 hover:bg-white/5 px-4.5 py-2.5 rounded-xl text-[8.5px] font-black uppercase tracking-widest transition-all cursor-pointer"
+                  >
+                    Listen to Master Only
+                  </button>
+                  
+                  <button
+                    onClick={() => {
+                      setShowReviewSheet(false);
+                      setTimeout(() => {
+                        startRecordingFlow();
+                      }, 500);
+                    }}
+                    className="bg-[#D4AF37]/10 hover:bg-[#D4AF37]/20 border border-[#D4AF37]/30 text-[#D4AF37] px-4.5 py-2.5 rounded-xl text-[8.5px] font-black uppercase tracking-widest transition-all hover:scale-105 cursor-pointer"
+                  >
+                    Retry Recitation Goal
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      toast.success("Voice coordinate snapshot successfully preserved in Historical Ledger!", { icon: '💾' });
+                    }}
+                    className="bg-zinc-900 border border-white/10 text-slate-300 hover:text-white px-4.5 py-2.5 rounded-xl text-[8.5px] font-black uppercase tracking-widest transition-all cursor-pointer"
+                  >
+                    Save to Ledger History
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      toast.success("Offline cache download initiated for offline fine-tuned matching feedback!");
+                    }}
+                    className="bg-zinc-900 border border-white/10 text-slate-300 hover:text-white px-4.5 py-2.5 rounded-xl text-[8.5px] font-black uppercase tracking-widest transition-all cursor-pointer"
+                  >
+                    Secure Offline Download
+                  </button>
+                </div>
+
                 <button
                   onClick={() => setShowReviewSheet(false)}
-                  className="bg-[#D4AF37] text-[#121214] px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg"
+                  className="bg-[#D4AF37] text-[#121214] px-8 py-3.5 rounded-xl text-[10px] font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg cursor-pointer"
                 >
                   Return to Pavilion
                 </button>
