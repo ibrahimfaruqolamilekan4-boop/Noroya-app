@@ -307,7 +307,7 @@ export const QuranReviewInline: React.FC<QuranReviewInlineProps> = ({
               </p>
             </div>
 
-            {geminiAnalysis.wordAnalyses.length > 0 ? (
+            {(geminiAnalysis.wordAnalyses?.length ?? 0) > 0 ? (
               <div className="space-y-3">
                 <span className="text-[8px] font-black uppercase text-slate-500 block">Syllable correction breakdown (Nooraya highlight)</span>
                 {geminiAnalysis.wordAnalyses.map((wa, i) => (
