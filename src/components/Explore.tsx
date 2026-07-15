@@ -21,6 +21,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { dbService } from '../services/dbService';
 import { toast } from 'react-hot-toast';
 import { QuranPractice } from './QuranPractice';
+import { ErrorBoundary } from './ErrorBoundary';
 import { RevertPath } from './RevertPath';
 import { ArticleViewer } from './ArticleViewer';
 import { ChroniclesEngine } from './ChroniclesEngine';
@@ -1179,7 +1180,12 @@ export const Explore = () => {
 
       {activeTab === 'tarteel' && (
         <section className="py-12">
-          <QuranPractice />
+          <ErrorBoundary
+            title="Tarteel AI hit a snag"
+            message="Your Explore page is fine - just this recitation session needs a restart."
+          >
+            <QuranPractice />
+          </ErrorBoundary>
         </section>
       )}
 
@@ -1299,4 +1305,3 @@ export const Explore = () => {
     </div>
   );
 };
-
