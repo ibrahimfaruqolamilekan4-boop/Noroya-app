@@ -1,0 +1,60 @@
+import React, { useState } from 'react';
+
+const TarteelStudio = () => {
+  const [isListening, setIsListening] = useState(false);
+  const [highlightedText, setHighlightedText] = useState<React.ReactNode[]>([]);
+  const fullAyah = "بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ الْحَمْدُ لِلَّهِ رَبِّ الْعَالَمِينَ";
+
+  const startListening = () => {
+    // Use Web Speech API (add better library if needed)
+    const SpeechRecognition = window.SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'ar-SA';
+
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript;
+      updateHighlights(transcript);
+    };
+
+    recognition.start();
+    setIsListening(true);
+  };
+
+  const updateHighlights = (transcript: string) => {
+    const words = fullAyah.split(' ');
+    const newHighlights = words.map((word) => {
+      const isCorrect = transcript.includes(word);
+      return (
+        <span key={word} style={{ color: isCorrect ? '#fbbf24' : '#ef4444', fontSize: '28px' }}>
+          {word} 
+        </span>
+      );
+    });
+    setHighlightedText(newHighlights);
+  };
+
+  return (
+    <div className="p-8 bg-gray-950 min-h-screen text-white">
+      <h1 className="text-4xl font-bold text-amber-400 mb-8">Tarteel AI Studio</h1>
+
+      <div className="max-w-2xl mx-auto bg-gray-900 rounded-3xl p-10 text-center">
+        <div className="mb-12 min-h-[200px] flex items-center justify-center text-3xl leading-relaxed">
+          {highlightedText.length > 0 ? highlightedText : fullAyah}
+        </div>
+
+        <button
+          onClick={startListening}
+          className={`w-32 h-32 rounded-full flex items-center justify-center text-6xl transition-all ${
+            isListening ? 'bg-red-500 animate-pulse' : 'bg-amber-400'
+          }`}
+        >
+          🎤
+        </button>
+
+        <p className="mt-6 text-gray-400">{isListening ? "Listening... Recite now" : "Tap to start recitation"}</p>
+      </div>
+    </div>
+  );
+};
+
+export default TarteelStudio;
