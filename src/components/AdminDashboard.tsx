@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../lib/firebase';
 import { collection, query, getDocs, updateDoc, doc, where } from 'firebase/firestore';
-import { Shield, Check, X, Users, Video, AlertCircle } from 'lucide-react';
+import { Shield, Check, X, Users, Video, AlertCircle, Mic } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 
 export const AdminDashboard = () => {
@@ -133,6 +134,23 @@ export const AdminDashboard = () => {
              </div>
              <Shield className="absolute -right-12 -bottom-12 text-black/5 w-64 h-64 -rotate-12 group-hover:scale-110 transition-transform duration-700" />
           </div>
+
+          {/* Tarteel AI Studio card */}
+          <Link to="/admin/tarteel" className="block">
+            <div className="glass-card p-10 rounded-[2.5rem] group cursor-pointer relative overflow-hidden">
+              <div className="relative z-10">
+                <div className="w-14 h-14 rounded-[1.2rem] bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mb-6 group-hover:bg-emerald-500/20 transition-all">
+                  <Mic size={24} className="text-emerald-400" />
+                </div>
+                <h3 className="text-lg font-serif font-bold text-cream mb-2">Tarteel AI Studio</h3>
+                <p className="text-sm text-slate-400 leading-relaxed mb-6">Word-by-word Quran memorization with live speech recognition and accuracy review.</p>
+                <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400 flex items-center gap-1.5">
+                  Open Studio →
+                </span>
+              </div>
+              <Mic className="absolute -right-8 -bottom-8 text-emerald-500/5 w-40 h-40 group-hover:scale-110 transition-transform duration-700" />
+            </div>
+          </Link>
 
           <div className="glass-card p-10 rounded-[2.5rem]">
             <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-gold mb-8">Abundance Flow</h3>

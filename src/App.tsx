@@ -84,6 +84,7 @@ import { DuaLibrary } from './components/DuaLibrary';
 import { RevertPath } from './components/RevertPath';
 import { AlBayan } from './components/AlBayan';
 import { QuranPlayer } from './components/QuranPlayer';
+import { TarteelAIStudio } from './components/TarteelAIStudio';
 
 export default function App() {
   const [isQAModalOpen, setIsQAModalOpen] = useState(false);
@@ -146,6 +147,13 @@ export default function App() {
             <AdminRoute>
               <MainLayout>
                 <AdminDashboard />
+              </MainLayout>
+            </AdminRoute>
+          } />
+          <Route path="/admin/tarteel" element={
+            <AdminRoute>
+              <MainLayout>
+                <TarteelAIStudio />
               </MainLayout>
             </AdminRoute>
           } />
