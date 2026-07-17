@@ -12,7 +12,7 @@ const __dirname = path.dirname(__filename);
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = parseInt(process.env.PORT || "5000", 10);
 
   // Initialize the Gemini client helper safely on the server side
   const googleGenAI = new GoogleGenAI({
@@ -170,20 +170,27 @@ How can we work together to bring more focus and comfort into your life today?`;
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     console.log("Starting in development mode with Vite middleware...");
+    const hmrConfig = process.env.REPLIT_DEV_DOMAIN
+      ? { host: process.env.REPLIT_DEV_DOMAIN, clientPort: 443, protocol: 'wss' as const }
+      : { clientPort: 443 };
+
     const vite = await createViteServer({
       server: { 
         middlewareMode: true,
         host: '0.0.0.0',
-        port: 3000,
-        hmr: {
-          clientPort: 443
-        }
+        port: PORT,
+        hmr: hmrConfig,
       },
       appType: "spa"
     });
     app.use(vite.middlewares);
     
     app.use('*', async (req, res, next) => {
+      // Only serve the SPA shell for HTML navigation requests
+      const accept = req.headers.accept || '';
+      if (!accept.includes('text/html')) {
+        return next();
+      }
       const url = req.originalUrl;
       try {
         let template = fs.readFileSync(path.resolve(process.cwd(), 'index.html'), 'utf-8');
