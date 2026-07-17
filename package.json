@@ -36,9 +36,6 @@
     "tus-js-client": "^4.3.1",
     "vite": "^6.2.3"
   },
-  "overrides": {
-    "websocket-driver": "0.7.5"
-  },
   "devDependencies": {
     "@types/cors": "^2.8.19",
     "@types/d3": "^7.4.3",

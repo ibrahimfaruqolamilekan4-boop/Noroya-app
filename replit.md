@@ -35,3 +35,4 @@ The app degrades gracefully: if `GEMINI_API_KEY` is missing it uses built-in moc
 
 - `package.json` has an `overrides` entry pinning `websocket-driver` to `0.7.5` to satisfy Replit's security policy (the Firebase dependency pulled in an older blocked version).
 - `src/components/ErrorBoundary.tsx` was created during setup — it was imported by several components but missing from the repository.
+- Server binds to port 5000 (configurable via `$PORT`). The original repo used port 3000 (AI Studio default).

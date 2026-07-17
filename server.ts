@@ -187,10 +187,7 @@ How can we work together to bring more focus and comfort into your life today?`;
     
     app.use('*', async (req, res, next) => {
       // Only serve the SPA shell for HTML navigation requests
-      const accept = req.headers.accept || '';
-      if (!accept.includes('text/html')) {
-        return next();
-      }
+      if (!req.headers.accept?.includes('text/html')) return next();
       const url = req.originalUrl;
       try {
         let template = fs.readFileSync(path.resolve(process.cwd(), 'index.html'), 'utf-8');

@@ -1,10 +1,4 @@
-modules = ["nodejs-20", "web"]
-[agent]
-expertMode = true
-
-[nix]
-channel = "stable-25_05"
-
+modules = ["nodejs-24"]
 [workflows]
 runButton = "Project"
 
@@ -30,9 +24,16 @@ waitForPort = 5000
 outputType = "webview"
 
 [[ports]]
+localPort = 3000
+externalPort = 3000
+
+[[ports]]
 localPort = 5000
-externalPort = 5000
+externalPort = 80
 
 [[ports]]
 localPort = 24678
-externalPort = 80
+externalPort = 3001
+
+[agent]
+expertMode = true
