@@ -70,20 +70,20 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
       });
       onClose();
     } catch (err: any) {
-      console.error(err);
-      const popupBlocked = ['auth/popup-blocked', 'auth/popup-closed-by-user', 'auth/cancelled-popup-request'].includes(err?.code);
-      if (popupBlocked) {
-        // Fall back to redirect — works on mobile Safari and popup-blocked environments
-        try {
-          await signInWithGoogleRedirect();
-          // Page will redirect to Google; Firebase handles the result on return via onAuthStateChanged
-        } catch (redirectErr) {
-          console.error(redirectErr);
-          toast.error("Guardian login failed. Please try again.");
-          setLoading(false);
-        }
-      } else {
-        toast.error("Guardian login failed. Please try again.");
+      console.error("Guardian login error:", err?.code, err?.message);
+      // User deliberately closed the popup — don't redirect, just reset
+      if (err?.code === 'auth/popup-closed-by-user' || err?.code === 'auth/cancelled-popup-request') {
+        setLoading(false);
+        return;
+      }
+      // For ALL other errors (popup-blocked, unauthorized-domain, network, etc.)
+      // fall back to redirect — this works on every browser/environment
+      try {
+        await signInWithGoogleRedirect();
+        // Page will redirect to Google — onAuthStateChanged fires on return
+      } catch (redirectErr: any) {
+        console.error("Redirect fallback also failed:", redirectErr?.code, redirectErr?.message);
+        toast.error(`Login error: ${redirectErr?.code || 'unknown'}. Check Firebase authorized domains.`);
         setLoading(false);
       }
     }

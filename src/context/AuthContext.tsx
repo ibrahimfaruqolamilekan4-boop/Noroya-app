@@ -1,8 +1,8 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { User as FirebaseUser, onAuthStateChanged } from 'firebase/auth';
+import { User as FirebaseUser, onAuthStateChanged, getRedirectResult } from 'firebase/auth';
 import { auth, db } from '../lib/firebase';
 import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { logout as firebaseLogout } from '../lib/firebase';
+import { logout as firebaseLogout, googleProvider } from '../lib/firebase';
 
 interface UserProfile {
   uid: string;
@@ -48,6 +48,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
+    // Handle return from signInWithRedirect (Google redirect flow on mobile/blocked-popup)
+    getRedirectResult(auth).then((result) => {
+      if (result?.user) {
+        console.log("Redirect sign-in succeeded:", result.user.email);
+      }
+    }).catch((err) => {
+      console.warn("getRedirectResult error (usually safe to ignore):", err?.code);
+    });
+
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       console.log("Auth state changed:", firebaseUser?.email);
       setUser(firebaseUser);
