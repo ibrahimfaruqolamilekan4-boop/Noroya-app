@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Home, Compass, MessageSquareCode, User, Plus, Search, Bell, Shield, Menu, X, Settings as SettingsIcon, Sparkles, LogOut, Atom, UserPlus, Globe, BookCopy, Activity, Wind, Star, Music, Footprints, MoreHorizontal, Play, Pause, BookOpen } from 'lucide-react';
+import { Home, Compass, MessageSquareCode, User, Plus, Search, Bell, Shield, Menu, X, Settings as SettingsIcon, Sparkles, LogOut, Atom, UserPlus, Globe, BookCopy, Activity, Wind, Star, Music, Footprints, MoreHorizontal, Play, Pause, BookOpen, Mic } from 'lucide-react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { Share2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
@@ -312,6 +312,20 @@ export const Navbar = () => {
                   )}
                   {profile?.role === 'admin' && (
                     <button
+                      onClick={() => { navigate('/admin/tarteel'); setIsMenuOpen(false); }}
+                      className={cn(
+                        "w-full flex items-center space-x-4 p-3 rounded-2xl transition-all font-black uppercase tracking-widest text-[9px]",
+                        location.pathname === '/admin/tarteel'
+                          ? "bg-emerald-500/20 text-emerald-400"
+                          : "text-emerald-400/60 hover:bg-emerald-500/10 hover:text-emerald-400"
+                      )}
+                    >
+                      <Mic size={18} />
+                      <span>Tarteel Studio</span>
+                    </button>
+                  )}
+                  {profile?.role === 'admin' && (
+                    <button
                       onClick={() => { navigate('/admin'); setIsMenuOpen(false); }}
                       className="w-full flex items-center space-x-4 p-3 rounded-2xl text-red-400 hover:bg-red-400/10 transition-all font-black uppercase tracking-widest text-[9px]"
                     >
@@ -448,6 +462,20 @@ export const Sidebar = () => {
                       </button>
                     )}
 
+                    {profile?.role === 'admin' && (
+                      <button
+                        onClick={() => navigate('/admin/tarteel')}
+                        className={cn(
+                          "w-full flex items-center justify-center md:justify-start space-x-5 p-4 rounded-[1.5rem] transition-all border border-transparent",
+                          location.pathname === '/admin/tarteel'
+                            ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/20"
+                            : "text-emerald-400/60 hover:bg-emerald-500/10 hover:text-emerald-400"
+                        )}
+                      >
+                        <Mic size={24} />
+                        <span className="font-black uppercase tracking-[0.2em] text-[10px] hidden md:block">Tarteel Studio</span>
+                      </button>
+                    )}
                     {profile?.role === 'admin' && (
                       <button
                         onClick={() => navigate('/admin')}
