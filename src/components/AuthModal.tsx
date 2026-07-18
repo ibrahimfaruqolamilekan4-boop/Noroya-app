@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Mail, Lock, User, Sparkles, LogIn, UserPlus, Shield } from 'lucide-react';
-import { loginWithEmail, registerWithEmail, signInWithGoogle } from '../lib/firebase';
+import { loginWithEmail, registerWithEmail, signInWithGoogle, signInWithGoogleRedirect } from '../lib/firebase';
 import { toast } from 'react-hot-toast';
 
 const ADMIN_EMAIL = 'ibrahimfaruqolamilekan4@gmail.com';
@@ -57,6 +57,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
   const handleAdminLogin = async () => {
     setLoading(true);
     try {
+      // Try popup first (works in desktop browsers)
       await signInWithGoogle();
       toast.success("Welcome back, Guardian. Access granted.", {
         icon: '🛡️',
@@ -70,9 +71,21 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
       onClose();
     } catch (err: any) {
       console.error(err);
-      toast.error("Guardian login failed. Please try again.");
-    } finally {
-      setLoading(false);
+      const popupBlocked = ['auth/popup-blocked', 'auth/popup-closed-by-user', 'auth/cancelled-popup-request'].includes(err?.code);
+      if (popupBlocked) {
+        // Fall back to redirect — works on mobile Safari and popup-blocked environments
+        try {
+          await signInWithGoogleRedirect();
+          // Page will redirect to Google; Firebase handles the result on return via onAuthStateChanged
+        } catch (redirectErr) {
+          console.error(redirectErr);
+          toast.error("Guardian login failed. Please try again.");
+          setLoading(false);
+        }
+      } else {
+        toast.error("Guardian login failed. Please try again.");
+        setLoading(false);
+      }
     }
   };
 

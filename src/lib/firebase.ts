@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, signOut, createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { initializeFirestore, doc, getDocFromServer, memoryLocalCache } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import firebaseConfig from '../../firebase-applet-config.json';
@@ -25,6 +25,9 @@ export const signInWithGoogle = async () => {
     throw error;
   }
 };
+
+/** Redirect-based Google sign-in — works reliably on mobile Safari and in environments where popups are blocked. */
+export const signInWithGoogleRedirect = () => signInWithRedirect(auth, googleProvider);
 
 export const registerWithEmail = async (email: string, password: string, name: string) => {
   try {

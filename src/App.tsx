@@ -85,6 +85,7 @@ import { RevertPath } from './components/RevertPath';
 import { AlBayan } from './components/AlBayan';
 import { QuranPlayer } from './components/QuranPlayer';
 import { TarteelAIStudio } from './components/TarteelAIStudio';
+import { Mic } from 'lucide-react';
 
 export default function App() {
   const [isQAModalOpen, setIsQAModalOpen] = useState(false);
@@ -143,6 +144,11 @@ export default function App() {
               <AICounselor />
             </ProtectedWrapper>
           } />
+          <Route path="/tarteel" element={
+            <MainLayout>
+              <TarteelAIStudio />
+            </MainLayout>
+          } />
           <Route path="/admin" element={
             <AdminRoute>
               <MainLayout>
@@ -151,11 +157,9 @@ export default function App() {
             </AdminRoute>
           } />
           <Route path="/admin/tarteel" element={
-            <AdminRoute>
-              <MainLayout>
-                <TarteelAIStudio />
-              </MainLayout>
-            </AdminRoute>
+            <MainLayout>
+              <TarteelAIStudio />
+            </MainLayout>
           } />
           <Route path="/explore" element={
             <MainLayout>
