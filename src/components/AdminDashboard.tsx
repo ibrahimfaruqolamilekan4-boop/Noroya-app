@@ -13,10 +13,8 @@ export const AdminDashboard = () => {
   useEffect(() => {
     const fetchPending = async () => {
       try {
-        const q = query(supabase.from('users'), where('role', '==', 'cleric'));
-        const snap = await getDocs(q);
-        // Filter in memory to avoid needing a composite index for (role, verified)
-        const allClerics = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        const { data } = await supabase.from('users').select('*').eq('role', 'cleric');
+        const allClerics = data || [];
         setPendingClerics(allClerics.filter((c: any) => c.verified === false));
       } catch (err: any) {
         console.error("Admin fetch error:", err?.message || String(err));

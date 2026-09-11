@@ -46,17 +46,10 @@ export const AICounselor = () => {
       if (profile?.uid) {
         setIsInitialLoad(true);
         try {
-          const { collection, query, where, orderBy, limit, getDocs } = {}
-          const { db } = await import('../lib/auth');
           
-          const q = query(
-            supabase.from('noor_chats'),
-            where('userId', '==', profile.uid),
-            orderBy('updatedAt', 'desc'),
-            limit(1)
-          );
           
-          const snap = await getDocs(q);
+          
+          const { data: snapDocs } = await supabase.from('noor_chats').select('*').eq('userId', profile.uid).order('updatedAt', { ascending: false }).limit(1); const snap = { empty: !snapDocs || snapDocs.length === 0, docs: snapDocs?.map((d: any) => ({ data: () => d })) || [] };
           if (!snap.empty) {
             const data = snap.docs[0].data();
             setMessages(data.messages || []);
@@ -170,11 +163,10 @@ export const AICounselor = () => {
       setMessages([]);
       if (!isSecretMode && profile?.uid) {
         try {
-          const { collection, query, where, getDocs, deleteDoc, doc } = {}
-          const { db } = await import('../lib/auth');
-          const q = query(supabase.from('noor_chats'), where('userId', '==', profile.uid));
-          const snap = await getDocs(q);
-          const deletes = snap.docs.map(d => deleteDoc(doc(db, 'noor_chats', d.id)));
+          
+          
+          const { data: snapDocs } = await supabase.from('noor_chats').select('*').eq('userId', profile.uid);
+          const deletes = snapDocs?.map((d: any) => supabase.from('noor_chats').delete().eq('id', d.id)) || [];
           await Promise.all(deletes);
         } catch (e) {
           console.error("Failed to clear cloud history:", e);

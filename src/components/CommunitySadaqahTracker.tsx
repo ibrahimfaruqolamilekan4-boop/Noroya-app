@@ -35,7 +35,7 @@ export const CommunitySadaqahTracker = () => {
     // Listen to global stats
     const fetchStats = async () => {
         const { data } = await supabase.from('community_stats').select('*').eq('id', 'global').single();
-        if (data) setGlobalStats(data);
+        if (data) setStats(data);
       };
       fetchStats();
   }, []);

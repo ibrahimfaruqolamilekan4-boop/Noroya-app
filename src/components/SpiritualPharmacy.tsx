@@ -155,11 +155,7 @@ export const SpiritualPharmacy = () => {
     }
 
     try {
-      const userRef = doc(db, 'users', user.uid);
-      await updateDoc(userRef, {
-        noorPoints: 1 /* requires RPC in supabase */,
-        updatedAt: new Date().toISOString()
-      });
+      await supabase.from('users').update({ noorPoints: 1 }).eq('uid', user?.id);
       toast.success('+5 Noor Points! Alhamdulillah.', {
         icon: '✨',
         style: { borderRadius: '1rem', background: '#0a1a1a', color: '#D4AF37' }

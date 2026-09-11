@@ -95,8 +95,8 @@ export const Settings = () => {
             if (profile?.role === 'user') {
               if (confirm("Would you like to register as a Scholar? This allows you to upload lessons and answer counseling requests.")) {
                 try {
-                  const { doc, updateDoc, serverTimestamp } = {}
-                  const { db, handleFirestoreError, OperationType } = await import('../lib/auth');
+                  
+                  const { handleFirestoreError, OperationType } = await import('../lib/auth');
                   await supabase.from('users').update({ 
                     role: 'cleric', 
                     verified: true,

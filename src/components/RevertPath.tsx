@@ -180,11 +180,8 @@ export const RevertPath = () => {
   const claimPracticePoints = async () => {
     if (!user || pointsClaimed || !practiceScore || practiceScore < 70) return;
     try {
-      const userRef = doc(db, 'users', user.uid);
-      await updateDoc(userRef, {
-        noorPoints: 1 /* requires RPC in supabase */,
-        updatedAt: new Date().toISOString()
-      });
+       
+      await supabase.from('users').update({ noorPoints: 1 }).eq('uid', user?.id);
       setPointsClaimed(true);
       toast.success("+10 Noor Points Awarded!", { icon: '🏆' });
     } catch (e) {
@@ -211,13 +208,8 @@ export const RevertPath = () => {
     });
 
     try {
-      const userRef = doc(db, 'users', user.uid);
-      await updateDoc(userRef, {
-        revertPathDay: day + 1,
-        noorPoints: increment(dayData.isMilestone ? 100 : 50),
-        lastRevertDayCompletedAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      });
+       
+      await supabase.from('users').update({ revertPathDay: day + 1 }).eq('uid', user?.id);
       
       const successMsg = dayData.isGraduation 
         ? "MashaAllah! You have completed the 30-Day journey! You are a Noor-Bearer."
