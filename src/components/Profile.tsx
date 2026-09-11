@@ -9,22 +9,6 @@ import { toast } from 'react-hot-toast';
 import { cn } from '../lib/utils';
 import { VideoUpload } from './VideoUpload';
 
-// @ts-nocheck
-const db = {};
-const auth = { currentUser: { uid: '123' } };
-const doc = (...args: any[]) => args;
-const updateDoc = async (...args: any[]) => {};
-const setDoc = async (...args: any[]) => {};
-const deleteDoc = async (...args: any[]) => {};
-const getDoc = async (...args: any[]) => ({ exists: () => false, data: () => ({}) });
-const addDoc = async (...args: any[]) => ({ id: '123' });
-const query = (...args: any[]) => args;
-const where = (...args: any[]) => args;
-const orderBy = (...args: any[]) => args;
-const onSnapshot = (...args: any[]) => { return () => {}; };
-const getDocs = async (...args: any[]) => ({ docs: [], empty: true });
-const limit = (...args: any[]) => args;
-const increment = (...args: any[]) => args;
 
 export const Profile = () => {
   const { user, profile } = useAuth();
@@ -41,11 +25,11 @@ export const Profile = () => {
     setLoading(true);
     const path = `users/${user.uid}`;
     try {
-      await updateDoc(doc(db, 'users', user.uid), {
+      await supabase.from('users').update({
         displayName,
         bio,
         updatedAt: new Date().toISOString(),
-      });
+      }).eq('id', user.uid);
       toast.success('Profile updated successfully');
       setIsEditing(false);
     } catch (error) {

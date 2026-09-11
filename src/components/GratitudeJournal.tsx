@@ -1,3 +1,4 @@
+import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import React, { useState, useEffect } from 'react';
 import { Heart, Plus, Calendar, Sparkles, Trash2, Loader2, PenTool } from 'lucide-react';
@@ -7,22 +8,6 @@ import { handleFirestoreError, OperationType } from '../lib/auth';
 import { cn } from '../lib/utils';
 import { toast } from 'react-hot-toast';
 
-// @ts-nocheck
-const db = {};
-const auth = { currentUser: { uid: '123' } };
-const doc = (...args: any[]) => args;
-const updateDoc = async (...args: any[]) => {};
-const setDoc = async (...args: any[]) => {};
-const deleteDoc = async (...args: any[]) => {};
-const getDoc = async (...args: any[]) => ({ exists: () => false, data: () => ({}) });
-const addDoc = async (...args: any[]) => ({ id: '123' });
-const query = (...args: any[]) => args;
-const where = (...args: any[]) => args;
-const orderBy = (...args: any[]) => args;
-const onSnapshot = (...args: any[]) => { return () => {}; };
-const getDocs = async (...args: any[]) => ({ docs: [], empty: true });
-const limit = (...args: any[]) => args;
-const increment = (...args: any[]) => args;
 
 interface GratitudeEntry {
   id: string;
@@ -32,42 +17,32 @@ interface GratitudeEntry {
 }
 
 export const GratitudeJournal = () => {
+  const { user } = useAuth();
+
   const [entries, setEntries] = useState<GratitudeEntry[]>([]);
   const [input, setInput] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!auth.currentUser) return;
+    if (!user) return;
 
-    const q = query(
-      supabase.from('gratitude'),
-      where('userId', '==', auth.currentUser.uid),
-      orderBy('createdAt', 'desc')
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as GratitudeEntry[];
-      setEntries(data);
+    const fetchGratitude = async () => {
+      const { data } = await supabase.from('gratitude').select('*').eq('userId', user?.id).order('createdAt', { ascending: false });
+      if (data) setEntries(data);
       setLoading(false);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'gratitude');
-    });
-
-    return unsubscribe;
+    };
+    fetchGratitude();
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || !auth.currentUser) return;
+    if (!input.trim() || !user) return;
 
     setIsSubmitting(true);
     try {
       await supabase.from('gratitude').insert([{
-        userId: auth.currentUser.uid,
+        userId: user?.id,
         text: input,
         createdAt: new Date().toISOString(),
       }]);
@@ -84,7 +59,7 @@ export const GratitudeJournal = () => {
 
   const deleteEntry = async (id: string) => {
     try {
-      await deleteDoc(doc(db, 'gratitude', id));
+      await supabase.from('gratitude').delete().eq('id', id);
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, 'gratitude');
     }

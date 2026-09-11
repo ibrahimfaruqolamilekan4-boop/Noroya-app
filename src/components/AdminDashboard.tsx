@@ -5,22 +5,6 @@ import React, { useState, useEffect } from 'react';
 import { Shield, Check, X, Users, Video, AlertCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-// @ts-nocheck
-const db = {};
-const auth = { currentUser: { uid: '123' } };
-const doc = (...args: any[]) => args;
-const updateDoc = async (...args: any[]) => {};
-const setDoc = async (...args: any[]) => {};
-const deleteDoc = async (...args: any[]) => {};
-const getDoc = async (...args: any[]) => ({ exists: () => false, data: () => ({}) });
-const addDoc = async (...args: any[]) => ({ id: '123' });
-const query = (...args: any[]) => args;
-const where = (...args: any[]) => args;
-const orderBy = (...args: any[]) => args;
-const onSnapshot = (...args: any[]) => { return () => {}; };
-const getDocs = async (...args: any[]) => ({ docs: [], empty: true });
-const limit = (...args: any[]) => args;
-const increment = (...args: any[]) => args;
 
 export const AdminDashboard = () => {
   const [pendingClerics, setPendingClerics] = useState<any[]>([]);
@@ -45,7 +29,7 @@ export const AdminDashboard = () => {
 
   const handleVerify = async (userId: string, status: boolean) => {
     try {
-      await updateDoc(doc(db, 'users', userId), { verified: status });
+      await supabase.from('users').update({ verified: status }).eq('id', userId);
       setPendingClerics(prev => prev.filter(p => p.id !== userId));
       toast.success(status ? "Cleric verified!" : "Verification rejected");
     } catch (err: any) {

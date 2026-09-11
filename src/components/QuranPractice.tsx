@@ -19,22 +19,6 @@ import { ALL_SURAHS, fetchAyahContext } from '../data/quranExplorer';
 import { toast } from 'react-hot-toast';
 import { QuranReviewInline } from './QuranReviewInline';
 
-// @ts-nocheck
-const db = {};
-const auth = { currentUser: { uid: '123' } };
-const doc = (...args: any[]) => args;
-const updateDoc = async (...args: any[]) => {};
-const setDoc = async (...args: any[]) => {};
-const deleteDoc = async (...args: any[]) => {};
-const getDoc = async (...args: any[]) => ({ exists: () => false, data: () => ({}) });
-const addDoc = async (...args: any[]) => ({ id: '123' });
-const query = (...args: any[]) => args;
-const where = (...args: any[]) => args;
-const orderBy = (...args: any[]) => args;
-const onSnapshot = (...args: any[]) => { return () => {}; };
-const getDocs = async (...args: any[]) => ({ docs: [], empty: true });
-const limit = (...args: any[]) => args;
-const increment = (...args: any[]) => args;
 
 // Standardized structure for target verses
 interface VerseOption {
@@ -807,10 +791,10 @@ export const QuranPractice = () => {
         
         // Award modest noor points if score was above 75%
         if (score >= 75) {
-          await updateDoc(doc(db, 'users', user.uid), {
-            noorPoints: increment(15),
+          await supabase.from('users').update({
+            noorPoints: 1 /* requires RPC in supabase */,
             updatedAt: new Date().toISOString()
-          });
+          }).eq('id', user.uid);
         }
       } catch (err) {
         console.warn("Cloud persistence skipped:", err);
@@ -1074,7 +1058,7 @@ export const QuranPractice = () => {
     }
     setSavingSearchReflection(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session }: any } = await supabase.auth.getSession();
       const userId = session?.user?.id || user?.uid || 'anonymous_seeker';
       
       const content = `[Quran Voice Trace: ${searchResult.coordinate}]\n` +

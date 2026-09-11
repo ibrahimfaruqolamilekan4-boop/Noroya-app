@@ -11,22 +11,6 @@ import { cn } from '../lib/utils';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 
-// @ts-nocheck
-const db = {};
-const auth = { currentUser: { uid: '123' } };
-const doc = (...args: any[]) => args;
-const updateDoc = async (...args: any[]) => {};
-const setDoc = async (...args: any[]) => {};
-const deleteDoc = async (...args: any[]) => {};
-const getDoc = async (...args: any[]) => ({ exists: () => false, data: () => ({}) });
-const addDoc = async (...args: any[]) => ({ id: '123' });
-const query = (...args: any[]) => args;
-const where = (...args: any[]) => args;
-const orderBy = (...args: any[]) => args;
-const onSnapshot = (...args: any[]) => { return () => {}; };
-const getDocs = async (...args: any[]) => ({ docs: [], empty: true });
-const limit = (...args: any[]) => args;
-const increment = (...args: any[]) => args;
 
 // TypeScript Declarations
 interface Scholar {

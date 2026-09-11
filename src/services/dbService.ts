@@ -3,22 +3,6 @@ import { supabase } from '../lib/supabase';
 import { OperationType, handleFirestoreError } from '../lib/auth';
 import { ARTICLES as INITIAL_ARTICLES } from '../data/articles';
 
-// @ts-nocheck
-const db = {};
-const auth = { currentUser: { uid: '123' } };
-const doc = (...args: any[]) => args;
-const updateDoc = async (...args: any[]) => {};
-const setDoc = async (...args: any[]) => {};
-const deleteDoc = async (...args: any[]) => {};
-const getDoc = async (...args: any[]) => ({ exists: () => false, data: () => ({}) });
-const addDoc = async (...args: any[]) => ({ id: '123' });
-const query = (...args: any[]) => args;
-const where = (...args: any[]) => args;
-const orderBy = (...args: any[]) => args;
-const onSnapshot = (...args: any[]) => { return () => {}; };
-const getDocs = async (...args: any[]) => ({ docs: [], empty: true });
-const limit = (...args: any[]) => args;
-const increment = (...args: any[]) => args;
 
 // TYPES
 export interface DreamEntry {
@@ -137,7 +121,7 @@ export const dbService = {
         
       if (error) throw error;
       
-      const videos = await Promise.all((data || []).map(async (vDoc) => {
+      const videos = await Promise.all((data || []).map(async (vDoc: any) => {
         const { data: scholarData } = await supabase.from('users').select('*').eq('uid', vDoc.scholar_id).single();
         return {
           ...vDoc,
