@@ -1,6 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
 
-
 // Helper to validate URL
 const isValidHttpUrl = (string: string) => {
   let url;
@@ -26,7 +25,11 @@ export const supabase = isSupabaseConfigured
   : {
       auth: { 
         getSession: async () => ({ data: { session: null }, error: null }),
-        onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } })
+        onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
+        signUp: async () => ({ data: null, error: new Error('Supabase is not configured! Make sure your Vercel environment variables are named exactly VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY (they MUST start with VITE_).') }),
+        signInWithPassword: async () => ({ data: null, error: new Error('Supabase is not configured! Make sure your Vercel environment variables are named exactly VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.') }),
+        signInWithOAuth: async () => ({ data: null, error: new Error('Supabase is not configured! Make sure your Vercel environment variables are named exactly VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.') }),
+        signOut: async () => ({ error: null })
       },
       storage: { 
         from: () => ({ 
