@@ -11,6 +11,7 @@ import { useAudio } from '../context/AudioContext';
 import { logout } from '../lib/auth';
 import { AuthModal } from './AuthModal';
 import { VideoUpload } from './VideoUpload';
+import { CreatePostModal } from './CreatePostModal';
 import { ScholarVideoUpload } from './ScholarVideoUpload';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -21,6 +22,7 @@ export const Navbar = () => {
   const { isPlaying, togglePlay } = useAudio();
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const [showUpload, setShowUpload] = React.useState(false);
+  const [showCreatePost, setShowCreatePost] = React.useState(false);
   const [showScholarUpload, setShowScholarUpload] = React.useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = React.useState(false);
   const navigate = useNavigate();
@@ -351,6 +353,7 @@ export const Navbar = () => {
       )}
     </AnimatePresence>
     {showUpload && <VideoUpload onClose={() => setShowUpload(false)} />}
+      {showCreatePost && <CreatePostModal onClose={() => setShowCreatePost(false)} />}
     {showScholarUpload && <ScholarVideoUpload onClose={() => setShowScholarUpload(false)} />}
     <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
   </>
@@ -363,6 +366,7 @@ export const Sidebar = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [showUpload, setShowUpload] = React.useState(false);
+  const [showCreatePost, setShowCreatePost] = React.useState(false);
   
     const sidebarNavItems = [
     { icon: Home, label: t('nav.dashboard'), path: '/' },
@@ -440,9 +444,17 @@ export const Sidebar = () => {
                       </button>
                     )}
 
-                    {(profile?.role === 'admin' || profile?.role === 'cleric') && (
-                      <button
-                        onClick={() => setShowUpload(true)}
+                    
+  <button
+    onClick={() => setShowCreatePost(true)}
+    className="w-full flex items-center justify-center md:justify-start space-x-5 p-5 rounded-[1.5rem] transition-all bg-starry-teal text-gold border border-gold/20 shadow-2xl hover:bg-gold hover:text-starry-teal-dark hover:scale-[1.02] group active:scale-95 noor-glow"
+  >
+    <Plus size={24} className="group-hover:rotate-90 transition-transform" />
+    <span className="font-black uppercase tracking-[0.2em] text-[10px] hidden md:block">Create</span>
+  </button>
+  {(profile?.role === 'admin' || profile?.role === 'cleric') && (
+    <button
+      onClick={() => setShowUpload(true)}
                         className="w-full flex items-center justify-center md:justify-start space-x-5 p-5 rounded-[1.5rem] transition-all bg-gold text-starry-teal shadow-2xl shadow-gold/20 hover:scale-[1.02] group active:scale-95 noor-glow"
                       >
                         <Plus size={24} className="group-hover:rotate-90 transition-transform" />
@@ -497,6 +509,7 @@ export const Sidebar = () => {
         </div>
       </aside>
       {showUpload && <VideoUpload onClose={() => setShowUpload(false)} />}
+      {showCreatePost && <CreatePostModal onClose={() => setShowCreatePost(false)} />}
       {showScholarUpload && <ScholarVideoUpload onClose={() => setShowScholarUpload(false)} />}
     </>
   );
@@ -509,15 +522,15 @@ export const MobileNav = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [showUpload, setShowUpload] = React.useState(false);
+  const [showCreatePost, setShowCreatePost] = React.useState(false);
   const [showScholarUpload, setShowScholarUpload] = React.useState(false);
 
-  const navItems: { icon: any, label: string, path?: string, isMore?: boolean }[] = [
+  const navItems: { icon: any, label: string, path?: string, isMore?: boolean, isCreate?: boolean }[] = [
     { icon: Home, label: t('nav.dashboard'), path: '/' },
-    { icon: BookOpen, label: 'Al-Bayan', path: '/bayan' },
     { icon: Compass, label: t('nav.explore'), path: '/explore' },
+    { icon: Plus, label: 'Post', isCreate: true },
     { icon: Play, label: 'Quran', path: '/quran' },
     { icon: User, label: t('nav.profile'), path: '/profile' },
-    { icon: MoreHorizontal, label: 'More', isMore: true },
   ];
 
   return (
@@ -529,7 +542,9 @@ export const MobileNav = () => {
             <button
               key={item.label}
               onClick={() => {
-                if (item.isMore) {
+                if (item.isCreate) {
+                  setShowCreatePost(true);
+                } else if (item.isMore) {
                   window.dispatchEvent(new CustomEvent('toggle-mobile-menu'));
                 } else if (item.path) {
                   navigate(item.path);
@@ -537,16 +552,17 @@ export const MobileNav = () => {
               }}
               className={cn(
                 "flex flex-col items-center justify-center space-y-1 p-2 rounded-2xl transition-all",
-                isActive ? "text-gold" : "text-slate-400"
+                item.isCreate ? "bg-gold text-midnight scale-110 shadow-lg shadow-gold/20 -translate-y-4 rounded-full p-4" : (isActive ? "text-gold" : "text-slate-400")
               )}
             >
-              <item.icon size={20} className={cn("transition-all", isActive && "drop-shadow-[0_0_8px_rgba(212,175,55,0.4)]")} />
-              <span className="text-[9px] font-bold uppercase tracking-widest">{item.label}</span>
+              <item.icon size={item.isCreate ? 24 : 20} className={cn("transition-all", isActive && "drop-shadow-[0_0_8px_rgba(212,175,55,0.4)]")} />
+              {!item.isCreate && <span className="text-[9px] font-bold uppercase tracking-widest">{item.label}</span>}
             </button>
           );
         })}
       </nav>
       {showUpload && <VideoUpload onClose={() => setShowUpload(false)} />}
+      {showCreatePost && <CreatePostModal onClose={() => setShowCreatePost(false)} />}
       {showScholarUpload && <ScholarVideoUpload onClose={() => setShowScholarUpload(false)} />}
     </>
   );

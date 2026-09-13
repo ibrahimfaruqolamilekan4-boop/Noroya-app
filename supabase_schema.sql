@@ -170,3 +170,44 @@ ALTER TABLE public.tarteel_sessions DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.sadaqah DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.gratitude DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.questions DISABLE ROW LEVEL SECURITY;
+
+-- ==========================================
+-- New Feature: TikTok-Style Posts
+-- ==========================================
+
+CREATE TABLE IF NOT EXISTS public.posts (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  media_url TEXT NOT NULL,
+  media_type TEXT CHECK (media_type IN ('video', 'image')) NOT NULL,
+  caption TEXT,
+  surah_ayah_ref TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- Enable RLS
+ALTER TABLE public.posts ENABLE ROW LEVEL SECURITY;
+
+-- Policies for Posts
+CREATE POLICY "Posts are viewable by everyone" ON public.posts
+  FOR SELECT USING (true);
+
+CREATE POLICY "Users can insert their own posts" ON public.posts
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update their own posts" ON public.posts
+  FOR UPDATE USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete their own posts" ON public.posts
+  FOR DELETE USING (auth.uid() = user_id);
+
+-- Setup Storage Buckets
+-- Note: You may need to create buckets 'quranic_videos' and 'quranic_images' in your Supabase Dashboard -> Storage manually, or run these:
+INSERT INTO storage.buckets (id, name, public) VALUES ('quranic_videos', 'quranic_videos', true) ON CONFLICT (id) DO NOTHING;
+INSERT INTO storage.buckets (id, name, public) VALUES ('quranic_images', 'quranic_images', true) ON CONFLICT (id) DO NOTHING;
+
+CREATE POLICY "Public video access" ON storage.objects FOR SELECT USING (bucket_id = 'quranic_videos');
+CREATE POLICY "Authenticated users can upload videos" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'quranic_videos' AND auth.role() = 'authenticated');
+
+CREATE POLICY "Public image access" ON storage.objects FOR SELECT USING (bucket_id = 'quranic_images');
+CREATE POLICY "Authenticated users can upload images" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'quranic_images' AND auth.role() = 'authenticated');
